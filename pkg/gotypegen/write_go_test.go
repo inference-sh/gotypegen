@@ -381,6 +381,34 @@ func TestGoTracedConstsInMethodAllowed(t *testing.T) {
 	mustContain(t, code, "TaskStatusFailed")
 }
 
+func TestGoTracedShadowedVarName(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ShadowedName has a local var named "App" — should NOT be filtered.
+	// Old heuristics would false-positive match the var name against the type.
+	// go/types knows it's a local string variable, not a type reference.
+	mustContain(t, code, "func (a App) ShadowedName() string")
+}
+
+func TestGoTracedMethodWithTracedParam(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// HasVersion takes AppVersion (a traced type) as param — should be included
+	mustContain(t, code, "func (a App) HasVersion(v AppVersion) bool")
+}
+
 func TestGoTracedConstsIncluded(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"},

@@ -155,3 +155,15 @@ func (a App) MarshalLocal() ([]byte, error) {
 	}
 	return json.Marshal(Local{Name: a.Name})
 }
+
+// ShadowedName has a local variable named "App" — old heuristics would false-positive
+// match this as a type reference. go/types knows it's a local string var.
+func (a App) ShadowedName() string {
+	App := a.Name // local var shadows the type name
+	return strings.TrimSpace(App)
+}
+
+// AcceptsTracedType takes a traced type as parameter — should be included.
+func (a App) HasVersion(v AppVersion) bool {
+	return a.Version != nil && a.Version.Tag == v.Tag
+}
