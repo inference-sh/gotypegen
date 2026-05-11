@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -81,15 +80,10 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 				outPath = filepath.Join(filepath.Dir(pkgGen.conf.ResolvedOutputPath(pkgDir)), "schema.json")
 			case "python", "py":
 				code, err = pkgGen.GeneratePython()
-				// Derive .py filename from .ts filename (e.g., sdk.ts -> sdk.py)
-				tsPath := pkgGen.conf.ResolvedOutputPath(pkgDir)
-				pyName := strings.TrimSuffix(filepath.Base(tsPath), ".ts") + ".py"
-				outPath = filepath.Join(filepath.Dir(tsPath), pyName)
+				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".py")
 			case "go", "golang":
 				code, err = pkgGen.GenerateGo()
-				tsPath := pkgGen.conf.ResolvedOutputPath(pkgDir)
-				goName := strings.TrimSuffix(filepath.Base(tsPath), ".ts") + ".go"
-				outPath = filepath.Join(filepath.Dir(tsPath), goName)
+				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".go")
 
 				// Also write go.mod if configured
 				if err == nil {

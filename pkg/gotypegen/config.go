@@ -227,6 +227,18 @@ func (c PackageConfig) ResolvedOutputPath(packageDir string) string {
 	return c.OutputPath
 }
 
+// resolvedOutputPathForExt returns the output path with the given extension.
+// If output_path already has the target extension, use it directly.
+// Otherwise derive from the TS output path by swapping the extension.
+func (c PackageConfig) resolvedOutputPathForExt(packageDir string, ext string) string {
+	if c.OutputPath != "" && strings.HasSuffix(c.OutputPath, ext) {
+		return c.OutputPath
+	}
+	tsPath := c.ResolvedOutputPath(packageDir)
+	base := strings.TrimSuffix(filepath.Base(tsPath), ".ts")
+	return filepath.Join(filepath.Dir(tsPath), base+ext)
+}
+
 // Normalize returns a new PackageConfig with default values set.
 func (pc PackageConfig) Normalize() (PackageConfig, error) {
 	if pc.Indent == "" {
