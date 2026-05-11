@@ -15,10 +15,19 @@ type TypeInfo struct {
 	References []string // Type names this type references
 }
 
+// MethodInfo holds information about a method on a type
+type MethodInfo struct {
+	ReceiverType string         // The type name the method is on
+	FuncDecl     *ast.FuncDecl  // The full function declaration
+	File         string         // Source file
+	ExternalPkgs map[string]bool // Non-stdlib packages referenced in the body
+}
+
 // TypeGraph builds a dependency graph of all types in the package
 type TypeGraph struct {
-	Types     map[string]*TypeInfo // type name -> info
-	FileTypes map[string][]string  // file -> type names defined in it
+	Types     map[string]*TypeInfo    // type name -> info
+	FileTypes map[string][]string     // file -> type names defined in it
+	Methods   map[string][]*MethodInfo // receiver type name -> methods
 }
 
 // BuildTypeGraph parses all files and builds a type dependency graph
@@ -26,51 +35,190 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 	graph := &TypeGraph{
 		Types:     make(map[string]*TypeInfo),
 		FileTypes: make(map[string][]string),
+		Methods:   make(map[string][]*MethodInfo),
 	}
 
-	// First pass: collect all type definitions
+	// First pass: collect all type definitions and methods
 	for i, file := range g.pkg.Syntax {
 		filepath := g.GoFiles[i]
 		basename := filepath
 
-		ast.Inspect(file, func(n ast.Node) bool {
-			genDecl, ok := n.(*ast.GenDecl)
-			if !ok {
-				return true
-			}
+		// Collect import map for this file (ident -> path)
+		fileImports := buildImportMap(file)
 
-			for _, spec := range genDecl.Specs {
-				typeSpec, ok := spec.(*ast.TypeSpec)
-				if !ok {
+		for _, decl := range file.Decls {
+			switch d := decl.(type) {
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					typeSpec, ok := spec.(*ast.TypeSpec)
+					if !ok {
+						continue
+					}
+					if !typeSpec.Name.IsExported() {
+						continue
+					}
+
+					typeName := typeSpec.Name.Name
+					info := &TypeInfo{
+						Name:       typeName,
+						File:       basename,
+						TypeSpec:   typeSpec,
+						GenDecl:    d,
+						References: []string{},
+					}
+					info.References = collectTypeReferences(typeSpec.Type, g.conf.TypeMappings)
+
+					graph.Types[typeName] = info
+					graph.FileTypes[basename] = append(graph.FileTypes[basename], typeName)
+				}
+
+			case *ast.FuncDecl:
+				if d.Recv == nil || len(d.Recv.List) == 0 {
+					continue // not a method
+				}
+				if !d.Name.IsExported() {
 					continue
 				}
 
-				// Only track exported types
-				if !typeSpec.Name.IsExported() {
+				recvType := receiverTypeName(d.Recv.List[0].Type)
+				if recvType == "" {
 					continue
 				}
 
-				typeName := typeSpec.Name.Name
-				info := &TypeInfo{
-					Name:       typeName,
-					File:       basename,
-					TypeSpec:   typeSpec,
-					GenDecl:    genDecl,
-					References: []string{},
+				extPkgs := collectExternalPackages(d, fileImports)
+				mi := &MethodInfo{
+					ReceiverType: recvType,
+					FuncDecl:     d,
+					File:         basename,
+					ExternalPkgs: extPkgs,
 				}
-
-				// Collect references from the type definition
-				info.References = collectTypeReferences(typeSpec.Type, g.conf.TypeMappings)
-
-				graph.Types[typeName] = info
-				graph.FileTypes[basename] = append(graph.FileTypes[basename], typeName)
+				graph.Methods[recvType] = append(graph.Methods[recvType], mi)
 			}
-
-			return true
-		})
+		}
 	}
 
 	return graph
+}
+
+// buildImportMap returns a map from local package name to import path for a file.
+func buildImportMap(file *ast.File) map[string]string {
+	imports := make(map[string]string)
+	for _, imp := range file.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		var name string
+		if imp.Name != nil {
+			name = imp.Name.Name
+		} else {
+			// Use last element of path as default name
+			parts := strings.Split(path, "/")
+			name = parts[len(parts)-1]
+		}
+		imports[name] = path
+	}
+	return imports
+}
+
+// receiverTypeName extracts the type name from a method receiver expression.
+// Handles both value receivers (T) and pointer receivers (*T).
+func receiverTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return receiverTypeName(t.X)
+	case *ast.IndexExpr:
+		// Generic receiver: T[K]
+		return receiverTypeName(t.X)
+	case *ast.IndexListExpr:
+		// Generic receiver: T[K, V]
+		return receiverTypeName(t.X)
+	}
+	return ""
+}
+
+// collectExternalPackages walks a FuncDecl and returns the set of non-stdlib
+// import paths referenced via selector expressions (pkg.Ident).
+func collectExternalPackages(fn *ast.FuncDecl, fileImports map[string]string) map[string]bool {
+	pkgs := make(map[string]bool)
+
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if importPath, exists := fileImports[ident.Name]; exists {
+			if !isStdlib(importPath) {
+				pkgs[importPath] = true
+			}
+		}
+		return true
+	})
+
+	// Also check the signature (params + returns) for external types
+	if fn.Type.Params != nil {
+		for _, field := range fn.Type.Params.List {
+			collectExternalFromExpr(field.Type, fileImports, pkgs)
+		}
+	}
+	if fn.Type.Results != nil {
+		for _, field := range fn.Type.Results.List {
+			collectExternalFromExpr(field.Type, fileImports, pkgs)
+		}
+	}
+
+	return pkgs
+}
+
+// collectExternalFromExpr collects external package refs from a type expression.
+func collectExternalFromExpr(expr ast.Expr, fileImports map[string]string, pkgs map[string]bool) {
+	ast.Inspect(expr, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if importPath, exists := fileImports[ident.Name]; exists {
+			if !isStdlib(importPath) {
+				pkgs[importPath] = true
+			}
+		}
+		return true
+	})
+}
+
+// isStdlib returns true if the import path is a Go standard library package.
+// Stdlib packages don't contain a dot in the first path element.
+func isStdlib(importPath string) bool {
+	firstSlash := strings.IndexByte(importPath, '/')
+	first := importPath
+	if firstSlash > 0 {
+		first = importPath[:firstSlash]
+	}
+	return !strings.Contains(first, ".")
+}
+
+// FilterMethods returns methods on included types that compile in isolation:
+// only stdlib and trace-set types in their signatures and bodies.
+func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][]*MethodInfo {
+	result := make(map[string][]*MethodInfo)
+	for typeName, methods := range graph.Methods {
+		if !includedTypes[typeName] {
+			continue
+		}
+		for _, m := range methods {
+			if len(m.ExternalPkgs) == 0 {
+				result[typeName] = append(result[typeName], m)
+			}
+		}
+	}
+	return result
 }
 
 // collectTypeReferences extracts all type names referenced by an expression

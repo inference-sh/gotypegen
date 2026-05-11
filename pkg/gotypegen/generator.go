@@ -85,6 +85,22 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 				tsPath := pkgGen.conf.ResolvedOutputPath(pkgDir)
 				pyName := strings.TrimSuffix(filepath.Base(tsPath), ".ts") + ".py"
 				outPath = filepath.Join(filepath.Dir(tsPath), pyName)
+			case "go", "golang":
+				code, err = pkgGen.GenerateGo()
+				tsPath := pkgGen.conf.ResolvedOutputPath(pkgDir)
+				goName := strings.TrimSuffix(filepath.Base(tsPath), ".ts") + ".go"
+				outPath = filepath.Join(filepath.Dir(tsPath), goName)
+
+				// Also write go.mod if configured
+				if err == nil {
+					if goMod := pkgGen.GenerateGoMod(); goMod != "" {
+						modPath := filepath.Join(filepath.Dir(outPath), "go.mod")
+						if writeErr := os.WriteFile(modPath, []byte(goMod), 0664); writeErr != nil {
+							return fmt.Errorf("writing go.mod: %w", writeErr)
+						}
+						fmt.Printf("Generated %s\n", modPath)
+					}
+				}
 			default:
 				return fmt.Errorf("unknown format: %s", format)
 			}

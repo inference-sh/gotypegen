@@ -75,6 +75,21 @@ type PackageConfig struct {
 	// Default is "undefined".
 	// Useful for usage with JSON marshalers that output null for optional fields (e.g. gofiber JSON).
 	OptionalType string `yaml:"optional_type"`
+
+	// GoPackage is the package name for generated Go files (e.g. "types").
+	// Only used by the Go output format.
+	GoPackage string `yaml:"go_package"`
+
+	// GoModule is the module path for the generated go.mod (e.g. "inference.sh/types").
+	// If set, a go.mod file is generated alongside the output.
+	// Only used by the Go output format.
+	GoModule string `yaml:"go_module"`
+
+	// KeepTags is an allowlist of struct tag keys to preserve in Go output.
+	// If set, only listed tag keys are kept; all others are stripped.
+	// If empty/nil, all tags are kept (backwards-compatible).
+	// Only used by the Go output format.
+	KeepTags []string `yaml:"keep_tags"`
 }
 
 type Config struct {
@@ -183,6 +198,20 @@ func (c PackageConfig) IsEntryFile(pathToFile string) bool {
 func (c PackageConfig) IsExtraType(typeName string) bool {
 	for _, extra := range c.ExtraTypes {
 		if extra == typeName {
+			return true
+		}
+	}
+	return false
+}
+
+// ShouldKeepTag returns true if the tag key should be preserved in Go output.
+// If KeepTags is empty, all tags are kept.
+func (c PackageConfig) ShouldKeepTag(key string) bool {
+	if len(c.KeepTags) == 0 {
+		return true
+	}
+	for _, k := range c.KeepTags {
+		if k == key {
 			return true
 		}
 	}

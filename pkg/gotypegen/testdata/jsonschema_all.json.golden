@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "APIResponse": {
+      "type": "object",
+      "description": "APIResponse is a generic API response wrapper.",
+      "properties": {
+        "data": {
+          "$ref": "#/$defs/T"
+        },
+        "error": {
+          "type": "string"
+        },
+        "success": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "success"
+      ]
+    },
+    "App": {
+      "type": "object",
+      "description": "App represents an application.",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/AppCategory"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {}
+        },
+        "name": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "$ref": "#/$defs/AppVersion"
+        }
+      },
+      "required": [
+        "name",
+        "category"
+      ]
+    },
+    "AppCategory": {
+      "type": "string",
+      "description": "AppCategory represents the category of an app."
+    },
+    "AppVersion": {
+      "type": "object",
+      "description": "AppVersion represents a version of an app.",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tag"
+      ]
+    },
+    "Base": {
+      "type": "object",
+      "description": "Base holds common fields for all models.",
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "deleted_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "SDKTypes": {
+      "type": "object",
+      "description": "SDKTypes is a phantom type that pulls types into the trace."
+    },
+    "TaskStatus": {
+      "type": "integer",
+      "description": "TaskStatus represents the status of a task."
+    },
+    "Unreferenced": {
+      "type": "object",
+      "description": "Unreferenced is not referenced by any entry type.",
+      "properties": {
+        "data": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "data"
+      ]
+    }
+  }
+}
