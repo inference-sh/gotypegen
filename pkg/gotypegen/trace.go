@@ -25,19 +25,23 @@ type MethodInfo struct {
 
 // TypeGraph builds a dependency graph of all types in the package
 type TypeGraph struct {
-	Types     map[string]*TypeInfo    // type name -> info
-	FileTypes map[string][]string     // file -> type names defined in it
-	Methods   map[string][]*MethodInfo // receiver type name -> methods
-	Funcs     map[string]bool         // package-level function names
+	Types      map[string]*TypeInfo    // type name -> info
+	FileTypes  map[string][]string     // file -> type names defined in it
+	Methods    map[string][]*MethodInfo // receiver type name -> methods
+	Funcs      map[string]bool         // package-level function names (exported + unexported)
+	ConstTypes map[string]string       // const name -> type name (for typed consts)
+	Vars       map[string]bool         // package-level var names (not consts)
 }
 
 // BuildTypeGraph parses all files and builds a type dependency graph
 func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 	graph := &TypeGraph{
-		Types:     make(map[string]*TypeInfo),
-		FileTypes: make(map[string][]string),
-		Methods:   make(map[string][]*MethodInfo),
-		Funcs:     make(map[string]bool),
+		Types:      make(map[string]*TypeInfo),
+		FileTypes:  make(map[string][]string),
+		Methods:    make(map[string][]*MethodInfo),
+		Funcs:      make(map[string]bool),
+		ConstTypes: make(map[string]string),
+		Vars:       make(map[string]bool),
 	}
 
 	// First pass: collect all type definitions and methods
@@ -51,35 +55,50 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 		for _, decl := range file.Decls {
 			switch d := decl.(type) {
 			case *ast.GenDecl:
+				var constGroupType string // tracks iota type inheritance
 				for _, spec := range d.Specs {
-					typeSpec, ok := spec.(*ast.TypeSpec)
-					if !ok {
-						continue
-					}
-					if !typeSpec.Name.IsExported() {
-						continue
-					}
+					switch s := spec.(type) {
+					case *ast.TypeSpec:
+						if !s.Name.IsExported() {
+							continue
+						}
 
-					typeName := typeSpec.Name.Name
-					info := &TypeInfo{
-						Name:       typeName,
-						File:       basename,
-						TypeSpec:   typeSpec,
-						GenDecl:    d,
-						References: []string{},
-					}
-					info.References = collectTypeReferences(typeSpec.Type, g.conf.TypeMappings)
+						typeName := s.Name.Name
+						info := &TypeInfo{
+							Name:       typeName,
+							File:       basename,
+							TypeSpec:   s,
+							GenDecl:    d,
+							References: []string{},
+						}
+						info.References = collectTypeReferences(s.Type, g.conf.TypeMappings)
 
-					graph.Types[typeName] = info
-					graph.FileTypes[basename] = append(graph.FileTypes[basename], typeName)
+						graph.Types[typeName] = info
+						graph.FileTypes[basename] = append(graph.FileTypes[basename], typeName)
+
+					case *ast.ValueSpec:
+						if d.Tok == token.VAR {
+							for _, name := range s.Names {
+								graph.Vars[name.Name] = true
+							}
+						} else if d.Tok == token.CONST {
+							// Track type with iota inheritance
+							if s.Type != nil {
+								if ident, ok := s.Type.(*ast.Ident); ok {
+									constGroupType = ident.Name
+								}
+							}
+							for _, name := range s.Names {
+								graph.ConstTypes[name.Name] = constGroupType
+							}
+						}
+					}
 				}
 
 			case *ast.FuncDecl:
 				if d.Recv == nil || len(d.Recv.List) == 0 {
-					// Package-level function (not a method)
-					if d.Name.IsExported() {
-						graph.Funcs[d.Name.Name] = true
-					}
+					// Package-level function (not a method) — track all, including unexported
+					graph.Funcs[d.Name.Name] = true
 					continue
 				}
 				if !d.Name.IsExported() {
@@ -212,7 +231,8 @@ func isStdlib(importPath string) bool {
 
 // FilterMethods returns methods on included types that compile in isolation:
 // only stdlib and trace-set types in their signatures and bodies.
-// Methods that reference non-traced types or package-level functions are excluded.
+// Methods that reference non-traced types, package-level functions, or
+// non-included vars are excluded. Constants for included types are allowed.
 func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][]*MethodInfo {
 	result := make(map[string][]*MethodInfo)
 	for typeName, methods := range graph.Methods {
@@ -224,7 +244,7 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 				continue
 			}
 			// Check that all same-package references are resolvable
-			typeRefs, funcRefs := collectLocalRefs(m.FuncDecl, graph.Types, graph.Funcs)
+			typeRefs, pkgLevelRefs := collectLocalRefs(m.FuncDecl, graph.Types, graph.Funcs, graph.Vars, graph.ConstTypes)
 			allResolved := true
 			for ref := range typeRefs {
 				if ref == typeName {
@@ -235,8 +255,8 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 					break
 				}
 			}
-			// Methods calling package-level functions can't compile standalone
-			if allResolved && len(funcRefs) > 0 {
+			// pkgLevelRefs only contains functions and non-const vars — always block
+			if allResolved && len(pkgLevelRefs) > 0 {
 				allResolved = false
 			}
 			if allResolved {
@@ -247,11 +267,13 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 	return result
 }
 
-// collectLocalRefs walks a FuncDecl's signature and body, returning
-// identifiers that refer to types or functions defined in the same package.
-func collectLocalRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo, knownFuncs map[string]bool) (typeRefs, funcRefs map[string]bool) {
+// collectLocalRefs walks a FuncDecl's signature and body, returning:
+// - typeRefs: identifiers that refer to types in the same package
+// - pkgLevelRefs: functions and non-const vars (things that won't be emitted)
+// Constants for known types are NOT included in pkgLevelRefs since they'll be emitted.
+func collectLocalRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo, knownFuncs map[string]bool, knownVars map[string]bool, constTypes map[string]string) (typeRefs, pkgLevelRefs map[string]bool) {
 	typeRefs = make(map[string]bool)
-	funcRefs = make(map[string]bool)
+	pkgLevelRefs = make(map[string]bool)
 
 	check := func(n ast.Node) bool {
 		switch x := n.(type) {
@@ -260,8 +282,13 @@ func collectLocalRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo, knownFu
 				typeRefs[x.Name] = true
 			}
 			if knownFuncs[x.Name] {
-				funcRefs[x.Name] = true
+				pkgLevelRefs[x.Name] = true
 			}
+			if knownVars[x.Name] {
+				pkgLevelRefs[x.Name] = true
+			}
+			// Typed consts are OK (they'll be emitted with their type) — don't flag them
+			// Untyped consts (constTypes[name] == "") are also fine, they're literals
 		case *ast.SelectorExpr:
 			// pkg.Type — skip, these are external references handled by ExternalPkgs
 			return false
@@ -285,7 +312,7 @@ func collectLocalRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo, knownFu
 		ast.Inspect(fn.Body, check)
 	}
 
-	return typeRefs, funcRefs
+	return typeRefs, pkgLevelRefs
 }
 
 // collectTypeReferences extracts all type names referenced by an expression
