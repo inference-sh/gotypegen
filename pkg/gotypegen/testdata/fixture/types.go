@@ -102,3 +102,9 @@ type unexportedType struct {
 type Unreferenced struct {
 	Data string `json:"data"`
 }
+
+// GetUnreferenced returns an Unreferenced — should be filtered out in trace mode
+// because Unreferenced is not in the trace set.
+func (a App) GetUnreferenced() *Unreferenced {
+	return &Unreferenced{Data: a.Name}
+}

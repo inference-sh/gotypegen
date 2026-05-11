@@ -20,6 +20,15 @@ func (g *PackageGenerator) GenerateGo() (string, error) {
 
 // generateGoAll emits all types (non-trace mode).
 func (g *PackageGenerator) generateGoAll() (string, error) {
+	graph := g.BuildTypeGraph()
+
+	// Include all exported types
+	allTypes := make(map[string]bool)
+	for name := range graph.Types {
+		allTypes[name] = true
+	}
+	allMethods := FilterMethods(graph, allTypes)
+
 	s := new(strings.Builder)
 	g.writeGoHeader(s)
 
@@ -35,7 +44,7 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 			continue
 		}
 		fileImports := buildImportMap(file)
-		g.generateGoFile(body, file, fp, nil, nil, fileImports, imports)
+		g.generateGoFile(body, file, fp, nil, allMethods, fileImports, imports)
 	}
 
 	g.writeGoImports(s, imports)

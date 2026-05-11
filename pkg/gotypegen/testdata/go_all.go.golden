@@ -3,6 +3,9 @@
 package types
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -55,14 +58,60 @@ type App struct {
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// MarshalApp is a method that uses an external-ish package.
+// For testing purposes, json is stdlib so this SHOULD be included.
+func (a App) MarshalApp() ([]byte, error) {
+	return json.Marshal(a)
+}
+
+// FullName returns the display name of the app.
+func (a App) FullName() string {
+	return strings.TrimSpace(a.Name)
+}
+
+// Ref returns a reference string for the app.
+func (a *App) Ref() string {
+	if a.Version != nil {
+		return fmt.Sprintf("%s@%s", a.Name, a.Version.Tag)
+	}
+	return a.Name
+}
+
+// GetUnreferenced returns an Unreferenced — should be filtered out in trace mode
+// because Unreferenced is not in the trace set.
+func (a App) GetUnreferenced() *Unreferenced {
+	return &Unreferenced{Data: a.Name}
+}
+
 // AppVersion represents a version of an app.
 type AppVersion struct {
 	Tag string `json:"tag" gorm:"not null"`
 	Description string `json:"description,omitempty"`
 }
 
+// String returns the tag.
+func (v AppVersion) String() string {
+	return v.Tag
+}
+
 // TaskStatus represents the status of a task.
 type TaskStatus int
+
+// String returns the string representation.
+func (ts TaskStatus) String() string {
+	switch ts {
+	case TaskStatusQueued:
+		return "queued"
+	case TaskStatusRunning:
+		return "running"
+	case TaskStatusCompleted:
+		return "completed"
+	case TaskStatusFailed:
+		return "failed"
+	default:
+		return "unknown"
+	}
+}
 
 const (
 	TaskStatusQueued TaskStatus = iota

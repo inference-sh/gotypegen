@@ -292,6 +292,22 @@ func TestGoTracedExternalMethodFiltered(t *testing.T) {
 	mustContain(t, code, "FullName")
 }
 
+func TestGoTracedLocalTypeRefFiltered(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// GetUnreferenced references Unreferenced which is not in trace set — should be filtered
+	mustNotContain(t, code, "GetUnreferenced")
+	// But FullName (stdlib only) and MarshalApp (stdlib only) should still be present
+	mustContain(t, code, "FullName")
+	mustContain(t, code, "MarshalApp")
+}
+
 func TestGoTracedConstsIncluded(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"},

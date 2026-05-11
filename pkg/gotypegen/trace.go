@@ -213,12 +213,64 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 			continue
 		}
 		for _, m := range methods {
-			if len(m.ExternalPkgs) == 0 {
+			if len(m.ExternalPkgs) > 0 {
+				continue
+			}
+			// Check that all same-package type references are in the trace set
+			localRefs := collectLocalTypeRefs(m.FuncDecl, graph.Types)
+			allResolved := true
+			for ref := range localRefs {
+				if ref == typeName {
+					continue // self-reference is fine
+				}
+				if !includedTypes[ref] {
+					allResolved = false
+					break
+				}
+			}
+			if allResolved {
 				result[typeName] = append(result[typeName], m)
 			}
 		}
 	}
 	return result
+}
+
+// collectLocalTypeRefs walks a FuncDecl's signature and body, returning
+// identifiers that refer to types defined in the same package.
+func collectLocalTypeRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo) map[string]bool {
+	refs := make(map[string]bool)
+
+	check := func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.Ident:
+			if _, ok := knownTypes[x.Name]; ok {
+				refs[x.Name] = true
+			}
+		case *ast.SelectorExpr:
+			// pkg.Type — skip, these are external references handled by ExternalPkgs
+			return false
+		}
+		return true
+	}
+
+	// Walk signature
+	if fn.Type.Params != nil {
+		for _, field := range fn.Type.Params.List {
+			ast.Inspect(field.Type, check)
+		}
+	}
+	if fn.Type.Results != nil {
+		for _, field := range fn.Type.Results.List {
+			ast.Inspect(field.Type, check)
+		}
+	}
+	// Walk body
+	if fn.Body != nil {
+		ast.Inspect(fn.Body, check)
+	}
+
+	return refs
 }
 
 // collectTypeReferences extracts all type names referenced by an expression
