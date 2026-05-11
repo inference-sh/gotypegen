@@ -27,7 +27,7 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 	for name := range graph.Types {
 		allTypes[name] = true
 	}
-	allMethods := FilterMethods(graph, allTypes)
+	allMethods := FilterMethods(graph, allTypes, g.pkg.TypesInfo, g.pkg.Types.Scope())
 
 	s := new(strings.Builder)
 	g.writeGoHeader(s)
@@ -57,7 +57,7 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 func (g *PackageGenerator) GenerateGoTraced() (string, error) {
 	graph := g.BuildTypeGraph()
 	includedTypes := g.TraceTypes(graph)
-	filteredMethods := FilterMethods(graph, includedTypes)
+	filteredMethods := FilterMethods(graph, includedTypes, g.pkg.TypesInfo, g.pkg.Types.Scope())
 
 	s := new(strings.Builder)
 	g.writeGoHeader(s)

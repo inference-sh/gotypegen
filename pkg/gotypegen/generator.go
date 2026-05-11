@@ -43,7 +43,7 @@ func (g *Generator) Generate() error {
 // GenerateWithFormats generates output for specified formats: typescript, jsonschema, python
 func (g *Generator) GenerateWithFormats(formats []string) error {
 	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedSyntax | packages.NeedFiles,
+		Mode: packages.NeedSyntax | packages.NeedFiles | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
 	}, g.conf.PackageNames()...)
 	if err != nil {
 		return err

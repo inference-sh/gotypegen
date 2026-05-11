@@ -26,7 +26,7 @@ func loadFixture(t *testing.T, conf *PackageConfig) *PackageGenerator {
 	}
 
 	pkgs, err := packages.Load(&packages.Config{
-		Mode: packages.NeedSyntax | packages.NeedFiles,
+		Mode: packages.NeedSyntax | packages.NeedFiles | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
 		Dir:  fixtureDir,
 	}, ".")
 	if err != nil {
@@ -581,7 +581,7 @@ func TestFilterMethodsOnlyStdlib(t *testing.T) {
 	})
 
 	graph := gen.BuildTypeGraph()
-	filtered := FilterMethods(graph, gen.TraceTypes(graph))
+	filtered := FilterMethods(graph, gen.TraceTypes(graph), gen.pkg.TypesInfo, gen.pkg.Types.Scope())
 
 	names := make(map[string]bool)
 	for _, m := range filtered["App"] {
