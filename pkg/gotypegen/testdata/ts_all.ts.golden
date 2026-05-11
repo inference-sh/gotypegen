@@ -71,3 +71,6 @@ export const TaskStatusFailed: TaskStatus = 3;
 export interface Unreferenced {
   data: string;
 }
+export interface Local {
+  name: string;
+}

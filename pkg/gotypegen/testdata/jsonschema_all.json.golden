@@ -93,6 +93,17 @@
         "updated_at"
       ]
     },
+    "Local": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
     "SDKTypes": {
       "type": "object",
       "description": "SDKTypes is a phantom type that pulls types into the trace."

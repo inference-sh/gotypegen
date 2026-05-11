@@ -902,8 +902,25 @@ func (g *PackageGenerator) writeGoStmt(
 	case *ast.DeclStmt:
 		s.WriteString(indent)
 		if gd, ok := st.Decl.(*ast.GenDecl); ok {
-			if gd.Tok == token.VAR {
+			switch gd.Tok {
+			case token.VAR:
 				s.WriteString("var ")
+				for _, spec := range gd.Specs {
+					if vs, ok := spec.(*ast.ValueSpec); ok {
+						g.writeGoValueSpec(s, vs, fileImports, imports)
+					}
+				}
+			case token.TYPE:
+				for _, spec := range gd.Specs {
+					if ts, ok := spec.(*ast.TypeSpec); ok {
+						s.WriteString("type ")
+						s.WriteString(ts.Name.Name)
+						s.WriteString(" ")
+						g.writeGoExpr(s, ts.Type, fileImports, imports)
+					}
+				}
+			case token.CONST:
+				s.WriteString("const ")
 				for _, spec := range gd.Specs {
 					if vs, ok := spec.(*ast.ValueSpec); ok {
 						g.writeGoValueSpec(s, vs, fileImports, imports)

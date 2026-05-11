@@ -233,7 +233,10 @@ func isStdlib(importPath string) bool {
 // only stdlib and trace-set types in their signatures and bodies.
 // Methods that reference non-traced types, package-level functions, or
 // non-included vars are excluded. Constants for included types are allowed.
+// Uses iterative filtering: if method A calls method B on a traced type and B
+// gets filtered, A is also filtered. Repeats until stable.
 func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][]*MethodInfo {
+	// First pass: filter by external packages, type refs, and pkg-level refs
 	result := make(map[string][]*MethodInfo)
 	for typeName, methods := range graph.Methods {
 		if !includedTypes[typeName] {
@@ -243,19 +246,17 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 			if len(m.ExternalPkgs) > 0 {
 				continue
 			}
-			// Check that all same-package references are resolvable
 			typeRefs, pkgLevelRefs := collectLocalRefs(m.FuncDecl, graph.Types, graph.Funcs, graph.Vars, graph.ConstTypes)
 			allResolved := true
 			for ref := range typeRefs {
 				if ref == typeName {
-					continue // self-reference is fine
+					continue
 				}
 				if !includedTypes[ref] {
 					allResolved = false
 					break
 				}
 			}
-			// pkgLevelRefs only contains functions and non-const vars — always block
 			if allResolved && len(pkgLevelRefs) > 0 {
 				allResolved = false
 			}
@@ -264,7 +265,125 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 			}
 		}
 	}
+
+	// Iterative pass: filter methods that call other methods not in the result set.
+	// A method ts.CanTransitionTo() calling ts.IsTerminal() needs IsTerminal in result.
+	for {
+		changed := false
+		emittedMethods := buildMethodSet(result)
+		for typeName, methods := range result {
+			var kept []*MethodInfo
+			for _, m := range methods {
+				calls := collectMethodCalls(m.FuncDecl, includedTypes, graph.Methods)
+				allPresent := true
+				for _, call := range calls {
+					if !emittedMethods[call] {
+						allPresent = false
+						break
+					}
+				}
+				if allPresent {
+					kept = append(kept, m)
+				} else {
+					changed = true
+				}
+			}
+			if len(kept) == 0 {
+				delete(result, typeName)
+			} else {
+				result[typeName] = kept
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+
 	return result
+}
+
+// buildMethodSet returns "TypeName.MethodName" strings for all methods in the map.
+func buildMethodSet(methods map[string][]*MethodInfo) map[string]bool {
+	set := make(map[string]bool)
+	for typeName, ms := range methods {
+		for _, m := range ms {
+			set[typeName+"."+m.FuncDecl.Name.Name] = true
+		}
+	}
+	return set
+}
+
+// collectMethodCalls returns "TypeName.MethodName" for calls to methods on traced types
+// found in a FuncDecl body (e.g., ts.IsTerminal() where ts is a TaskStatus).
+func collectMethodCalls(fn *ast.FuncDecl, includedTypes map[string]bool, allMethods map[string][]*MethodInfo) []string {
+	// Build a map of local variable name -> type name from the function signature
+	localVarTypes := make(map[string]string)
+
+	// Receiver
+	if fn.Recv != nil && len(fn.Recv.List) > 0 {
+		recv := fn.Recv.List[0]
+		typeName := receiverTypeName(recv.Type)
+		for _, name := range recv.Names {
+			localVarTypes[name.Name] = typeName
+		}
+	}
+
+	// Parameters
+	if fn.Type.Params != nil {
+		for _, field := range fn.Type.Params.List {
+			typeName := exprToTypeName(field.Type)
+			if typeName != "" && includedTypes[typeName] {
+				for _, name := range field.Names {
+					localVarTypes[name.Name] = typeName
+				}
+			}
+		}
+	}
+
+	var calls []string
+	if fn.Body == nil {
+		return calls
+	}
+
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if typeName, exists := localVarTypes[ident.Name]; exists {
+			// Check if this is actually a method on that type
+			if methods, ok := allMethods[typeName]; ok {
+				for _, m := range methods {
+					if m.FuncDecl.Name.Name == sel.Sel.Name {
+						calls = append(calls, typeName+"."+sel.Sel.Name)
+						break
+					}
+				}
+			}
+		}
+		return true
+	})
+
+	return calls
+}
+
+// exprToTypeName extracts a simple type name from an expression (handles *T and T).
+func exprToTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return exprToTypeName(t.X)
+	}
+	return ""
 }
 
 // collectLocalRefs walks a FuncDecl's signature and body, returning:

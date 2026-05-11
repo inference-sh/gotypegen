@@ -308,6 +308,79 @@ func TestGoTracedLocalTypeRefFiltered(t *testing.T) {
 	mustContain(t, code, "MarshalApp")
 }
 
+func TestGoTracedPkgFuncFiltered(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// UsesHelper calls helperFunc (package-level) — should be filtered
+	mustNotContain(t, code, "UsesHelper")
+	mustNotContain(t, code, "helperFunc")
+}
+
+func TestGoTracedPkgVarFiltered(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Label() uses statusLabels (package-level var) — should be filtered
+	mustNotContain(t, code, "func (ts TaskStatus) Label()")
+	mustNotContain(t, code, "statusLabels")
+}
+
+func TestGoTracedCascadingMethodFiltered(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// IsTerminal uses statusLabels (filtered) → CanTransition calls IsTerminal → also filtered
+	mustNotContain(t, code, "IsTerminal")
+	mustNotContain(t, code, "CanTransition")
+	// But String() uses only consts (emitted) — should be present
+	mustContain(t, code, "func (ts TaskStatus) String() string")
+}
+
+func TestGoTracedLocalTypeInMethodBody(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// MarshalLocal uses a local type (type Local struct{}) — should compile
+	mustContain(t, code, "MarshalLocal")
+	mustContain(t, code, "type Local struct")
+}
+
+func TestGoTracedConstsInMethodAllowed(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// TaskStatus.String() uses TaskStatusQueued etc (consts for an included type) — allowed
+	mustContain(t, code, "func (ts TaskStatus) String() string")
+	mustContain(t, code, "TaskStatusQueued")
+	mustContain(t, code, "TaskStatusFailed")
+}
+
 func TestGoTracedConstsIncluded(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"},

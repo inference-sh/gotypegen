@@ -77,6 +77,14 @@ func (a *App) Ref() string {
 	return a.Name
 }
 
+// MarshalLocal uses a local type declaration inside the method body.
+func (a App) MarshalLocal() ([]byte, error) {
+	type Local struct {
+	Name string `json:"name"`
+}
+	return json.Marshal(Local{Name: a.Name})
+}
+
 // AppVersion represents a version of an app.
 type AppVersion struct {
 	Tag string `json:"tag"`

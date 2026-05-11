@@ -108,3 +108,50 @@ type Unreferenced struct {
 func (a App) GetUnreferenced() *Unreferenced {
 	return &Unreferenced{Data: a.Name}
 }
+
+// --- Fixtures for method filtering edge cases ---
+
+// helperFunc is a package-level function (not emitted in trace mode).
+func helperFunc() string {
+	return "helper"
+}
+
+// statusLabels is a package-level var (not emitted in trace mode).
+var statusLabels = map[TaskStatus]string{
+	TaskStatusQueued: "Queued",
+}
+
+// UsesHelper calls a package-level function — should be filtered in trace mode.
+func (a App) UsesHelper() string {
+	return helperFunc()
+}
+
+// UsesVar references a package-level var — should be filtered in trace mode.
+func (ts TaskStatus) Label() string {
+	if l, ok := statusLabels[ts]; ok {
+		return l
+	}
+	return "unknown"
+}
+
+// IsTerminal checks if status is terminal.
+// References a package-level var, so filtered in trace mode.
+func (ts TaskStatus) IsTerminal() bool {
+	return statusLabels[ts] != ""
+}
+
+// CanTransition calls IsTerminal which itself gets filtered — cascading filter.
+func (ts TaskStatus) CanTransition(next TaskStatus) bool {
+	if ts.IsTerminal() {
+		return false
+	}
+	return true
+}
+
+// MarshalLocal uses a local type declaration inside the method body.
+func (a App) MarshalLocal() ([]byte, error) {
+	type Local struct {
+		Name string `json:"name"`
+	}
+	return json.Marshal(Local{Name: a.Name})
+}
