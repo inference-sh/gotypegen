@@ -77,7 +77,7 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 				outPath = pkgGen.conf.ResolvedOutputPath(pkgDir)
 			case "jsonschema", "json", "schema":
 				code, err = pkgGen.GenerateJSONSchema()
-				outPath = filepath.Join(filepath.Dir(pkgGen.conf.ResolvedOutputPath(pkgDir)), "schema.json")
+				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".json")
 			case "python", "py":
 				code, err = pkgGen.GeneratePython()
 				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".py")
