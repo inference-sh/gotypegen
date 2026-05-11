@@ -28,6 +28,7 @@ type TypeGraph struct {
 	Types     map[string]*TypeInfo    // type name -> info
 	FileTypes map[string][]string     // file -> type names defined in it
 	Methods   map[string][]*MethodInfo // receiver type name -> methods
+	Funcs     map[string]bool         // package-level function names
 }
 
 // BuildTypeGraph parses all files and builds a type dependency graph
@@ -36,6 +37,7 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 		Types:     make(map[string]*TypeInfo),
 		FileTypes: make(map[string][]string),
 		Methods:   make(map[string][]*MethodInfo),
+		Funcs:     make(map[string]bool),
 	}
 
 	// First pass: collect all type definitions and methods
@@ -74,7 +76,11 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 
 			case *ast.FuncDecl:
 				if d.Recv == nil || len(d.Recv.List) == 0 {
-					continue // not a method
+					// Package-level function (not a method)
+					if d.Name.IsExported() {
+						graph.Funcs[d.Name.Name] = true
+					}
+					continue
 				}
 				if !d.Name.IsExported() {
 					continue
@@ -206,6 +212,7 @@ func isStdlib(importPath string) bool {
 
 // FilterMethods returns methods on included types that compile in isolation:
 // only stdlib and trace-set types in their signatures and bodies.
+// Methods that reference non-traced types or package-level functions are excluded.
 func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][]*MethodInfo {
 	result := make(map[string][]*MethodInfo)
 	for typeName, methods := range graph.Methods {
@@ -216,10 +223,10 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 			if len(m.ExternalPkgs) > 0 {
 				continue
 			}
-			// Check that all same-package type references are in the trace set
-			localRefs := collectLocalTypeRefs(m.FuncDecl, graph.Types)
+			// Check that all same-package references are resolvable
+			typeRefs, funcRefs := collectLocalRefs(m.FuncDecl, graph.Types, graph.Funcs)
 			allResolved := true
-			for ref := range localRefs {
+			for ref := range typeRefs {
 				if ref == typeName {
 					continue // self-reference is fine
 				}
@@ -227,6 +234,10 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 					allResolved = false
 					break
 				}
+			}
+			// Methods calling package-level functions can't compile standalone
+			if allResolved && len(funcRefs) > 0 {
+				allResolved = false
 			}
 			if allResolved {
 				result[typeName] = append(result[typeName], m)
@@ -236,16 +247,20 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool) map[string][
 	return result
 }
 
-// collectLocalTypeRefs walks a FuncDecl's signature and body, returning
-// identifiers that refer to types defined in the same package.
-func collectLocalTypeRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo) map[string]bool {
-	refs := make(map[string]bool)
+// collectLocalRefs walks a FuncDecl's signature and body, returning
+// identifiers that refer to types or functions defined in the same package.
+func collectLocalRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo, knownFuncs map[string]bool) (typeRefs, funcRefs map[string]bool) {
+	typeRefs = make(map[string]bool)
+	funcRefs = make(map[string]bool)
 
 	check := func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.Ident:
 			if _, ok := knownTypes[x.Name]; ok {
-				refs[x.Name] = true
+				typeRefs[x.Name] = true
+			}
+			if knownFuncs[x.Name] {
+				funcRefs[x.Name] = true
 			}
 		case *ast.SelectorExpr:
 			// pkg.Type — skip, these are external references handled by ExternalPkgs
@@ -270,7 +285,7 @@ func collectLocalTypeRefs(fn *ast.FuncDecl, knownTypes map[string]*TypeInfo) map
 		ast.Inspect(fn.Body, check)
 	}
 
-	return refs
+	return typeRefs, funcRefs
 }
 
 // collectTypeReferences extracts all type names referenced by an expression
