@@ -46,7 +46,7 @@ class Base(TypedDict, total=False):
     deleted_at: Optional[Any]
 
 # App represents an application.
-class App(TypedDict, total=False):
+class App(Base, TypedDict, total=False):
     name: str
     category: AppCategory
     version: Optional[AppVersion]

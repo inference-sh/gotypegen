@@ -634,6 +634,39 @@ func TestGoOutputDeterministic(t *testing.T) {
 }
 
 // ============================================================
+// Behavioral tests — Python backend specifics
+// ============================================================
+
+func TestPyEmbeddedInheritance(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// App embeds Base with tstype:",extends" — Python should inherit
+	mustContain(t, code, "class App(Base, TypedDict, total=False):")
+	// Base itself has no parent types
+	mustContain(t, code, "class Base(TypedDict, total=False):")
+	// App should still have its own fields
+	mustContain(t, code, "    name: str")
+}
+
+func TestPyEmbeddedInheritanceTraced(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		Mode:       "trace",
+		EntryFiles: []string{"api.go"},
+	})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Same inheritance should work in traced mode
+	mustContain(t, code, "class App(Base, TypedDict, total=False):")
+}
+
+// ============================================================
 // helpers
 // ============================================================
 

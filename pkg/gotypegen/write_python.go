@@ -373,9 +373,17 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("\n")
 	}
 
+	// Collect parent types from embedded fields with tstype:",extends"
+	parents := g.collectPyParentTypes(st.Fields.List)
+
 	s.WriteString("class ")
 	s.WriteString(name)
-	s.WriteString("(TypedDict, total=False):\n")
+	s.WriteString("(")
+	for _, p := range parents {
+		s.WriteString(p)
+		s.WriteString(", ")
+	}
+	s.WriteString("TypedDict, total=False):\n")
 
 	if st.Fields == nil || len(st.Fields.List) == 0 {
 		s.WriteString("    pass\n\n")
@@ -385,7 +393,7 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 	hasFields := false
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 {
-			continue // Skip embedded
+			continue // Skip embedded (inherited via class parents)
 		}
 		for _, fieldName := range field.Names {
 			if !fieldName.IsExported() {
@@ -427,6 +435,30 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("    pass\n")
 	}
 	s.WriteString("\n")
+}
+
+// collectPyParentTypes extracts parent type names from embedded fields
+// that have a tstype:",extends" tag, mirroring the TypeScript inheritance behavior.
+func (g *PackageGenerator) collectPyParentTypes(fields []*ast.Field) []string {
+	var parents []string
+	for _, f := range fields {
+		if f.Type == nil || f.Tag == nil {
+			continue
+		}
+		tags, err := structtag.Parse(f.Tag.Value[1 : len(f.Tag.Value)-1])
+		if err != nil {
+			continue
+		}
+		tstypeTag, err := tags.Get("tstype")
+		if err != nil || !tstypeTag.HasOption("extends") {
+			continue
+		}
+		name, valid := getAnonymousFieldName(f.Type)
+		if valid {
+			parents = append(parents, name)
+		}
+	}
+	return parents
 }
 
 func (g *PackageGenerator) writePyConsts(s *strings.Builder, decl *ast.GenDecl, stringTypeAliases, intTypeAliases map[string]bool, enumMembers map[string]enumMemberInfo) {
