@@ -24,18 +24,17 @@ class SDKTypes(TypedDict, total=False):
 ##########
 # source: types.go
 
-class AppCategory(str, Enum):
-    IMAGE = "image"
-    VIDEO = "video"
-    AUDIO = "audio"
-    TEXT = "text"
-
 # Base holds common fields for all models.
 class Base(TypedDict, total=False):
     id: str
     created_at: Any
     updated_at: Any
     deleted_at: Optional[Any]
+
+# AppVersion represents a version of an app.
+class AppVersion(TypedDict, total=False):
+    tag: str
+    description: str
 
 # App represents an application.
 class App(Base, TypedDict, total=False):
@@ -45,10 +44,11 @@ class App(Base, TypedDict, total=False):
     tags: List[str]
     metadata: Dict[str, Any]
 
-# AppVersion represents a version of an app.
-class AppVersion(TypedDict, total=False):
-    tag: str
-    description: str
+class AppCategory(str, Enum):
+    IMAGE = "image"
+    VIDEO = "video"
+    AUDIO = "audio"
+    TEXT = "text"
 
 class TaskStatus(IntEnum):
     QUEUED = 0

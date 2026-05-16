@@ -677,6 +677,76 @@ func mustContain(t *testing.T, s, substr string) {
 	}
 }
 
+// ============================================================
+// Python ordering tests — parents and alias targets before dependents
+// ============================================================
+
+func TestPyParentClassOrdering(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Base must appear before App (App inherits from Base)
+	basePos := strings.Index(code, "class Base(TypedDict")
+	appPos := strings.Index(code, "class App(Base,")
+	if basePos == -1 {
+		t.Fatal("class Base not found in output")
+	}
+	if appPos == -1 {
+		t.Fatal("class App(Base,...) not found in output")
+	}
+	if basePos >= appPos {
+		t.Errorf("Base (pos %d) must appear before App (pos %d) — Python requires parent classes to be defined first", basePos, appPos)
+	}
+}
+
+func TestPyTypeAliasOrdering(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// App must appear before Application (Application = App)
+	appPos := strings.Index(code, "class App(Base,")
+	aliasPos := strings.Index(code, "Application = App")
+	if appPos == -1 {
+		t.Fatal("class App not found in output")
+	}
+	if aliasPos == -1 {
+		t.Fatal("Application alias not found in output")
+	}
+	if appPos >= aliasPos {
+		t.Errorf("App (pos %d) must appear before Application alias (pos %d) — Python requires the target to be defined first", appPos, aliasPos)
+	}
+}
+
+func TestPyTracedParentClassOrdering(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		Mode:       "trace",
+		EntryFiles: []string{"api.go"},
+	})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Base must appear before App in traced mode too
+	basePos := strings.Index(code, "class Base(TypedDict")
+	appPos := strings.Index(code, "class App(Base,")
+	if basePos == -1 {
+		t.Fatal("class Base not found in traced output")
+	}
+	if appPos == -1 {
+		t.Fatal("class App(Base,...) not found in traced output")
+	}
+	if basePos >= appPos {
+		t.Errorf("Base (pos %d) must appear before App (pos %d) in traced mode", basePos, appPos)
+	}
+}
+
 func mustNotContain(t *testing.T, s, substr string) {
 	t.Helper()
 	if strings.Contains(s, substr) {

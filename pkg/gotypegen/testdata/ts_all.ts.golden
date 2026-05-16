@@ -66,6 +66,10 @@ export const TaskStatusFailed: TaskStatus = 3;
  * unexportedType should not appear in output.
  */
 /**
+ * Application is a type alias for App.
+ */
+export type Application = App;
+/**
  * Unreferenced is not referenced by any entry type.
  */
 export interface Unreferenced {

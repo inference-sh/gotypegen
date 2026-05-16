@@ -66,21 +66,17 @@ func (g *PackageGenerator) GeneratePython() (string, error) {
 	// Second pass: build enum member map (Go const name -> Python enum reference)
 	enumMembers := g.buildEnumMemberMap(stringTypeAliases, intTypeAliases)
 
-	// Collect all type definitions
-	var typeSpecs []typeSpecWithDoc
+	// Collect all type entries and const entries
+	var typeEntries []pyTypeEntry
+	var constEntries []pyConstEntry
 
 	for i, file := range g.pkg.Syntax {
 		if g.conf.IsFileIgnored(g.GoFiles[i]) {
 			continue
 		}
 
-		// Write file source comment
 		filename := g.GoFiles[i]
-		parts := strings.Split(filename, "/")
-		fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-		s.WriteString(fileComment)
 
-		// Only process top-level declarations (not types inside functions)
 		for _, decl := range file.Decls {
 			genDecl, ok := decl.(*ast.GenDecl)
 			if !ok {
@@ -90,13 +86,10 @@ func (g *PackageGenerator) GeneratePython() (string, error) {
 			if genDecl.Tok == token.TYPE {
 				for _, spec := range genDecl.Specs {
 					if ts, ok := spec.(*ast.TypeSpec); ok && ts.Name.IsExported() {
-						// Skip duplicate type names
 						if seenTypes[ts.Name.Name] {
 							continue
 						}
 						seenTypes[ts.Name.Name] = true
-
-						// Skip string/int type aliases (they become enums with consts)
 						if stringTypeAliases[ts.Name.Name] || intTypeAliases[ts.Name.Name] {
 							continue
 						}
@@ -107,14 +100,54 @@ func (g *PackageGenerator) GeneratePython() (string, error) {
 						} else if genDecl.Doc != nil {
 							doc = strings.TrimSpace(genDecl.Doc.Text())
 						}
-						typeSpecs = append(typeSpecs, typeSpecWithDoc{ts, doc})
-						g.writePyType(s, ts, doc)
+
+						var deps []string
+						switch t := ts.Type.(type) {
+						case *ast.StructType:
+							if t.Fields != nil {
+								deps = g.collectPyParentTypes(t.Fields.List)
+							}
+						case *ast.Ident:
+							if !isBuiltinType(t.Name) && t.Name != "any" {
+								deps = []string{t.Name}
+							}
+						}
+
+						typeEntries = append(typeEntries, pyTypeEntry{
+							spec:    ts,
+							doc:     doc,
+							file:    filename,
+							parents: deps,
+						})
 					}
 				}
 			} else if genDecl.Tok == token.CONST {
-				g.writePyConsts(s, genDecl, stringTypeAliases, intTypeAliases, enumMembers)
+				constEntries = append(constEntries, pyConstEntry{decl: genDecl, file: filename})
 			}
 		}
+	}
+
+	// Topologically sort types so parents are emitted before children
+	typeEntries = topSortTypes(typeEntries)
+
+	// Emit types
+	lastFile := ""
+	for _, entry := range typeEntries {
+		if entry.file != lastFile {
+			parts := strings.Split(entry.file, "/")
+			fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
+			s.WriteString(fileComment)
+			lastFile = entry.file
+		}
+		g.writePyType(s, entry.spec, entry.doc)
+	}
+
+	// Emit constants
+	for _, entry := range constEntries {
+		parts := strings.Split(entry.file, "/")
+		fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
+		s.WriteString(fileComment)
+		g.writePyConsts(s, entry.decl, stringTypeAliases, intTypeAliases, enumMembers)
 	}
 
 	return s.String(), nil
@@ -175,6 +208,74 @@ func (g *PackageGenerator) buildEnumMemberMap(stringTypeAliases, intTypeAliases 
 	return enumMembers
 }
 
+// pyTypeEntry holds a collected type spec with its metadata for ordering
+type pyTypeEntry struct {
+	spec    *ast.TypeSpec
+	doc     string
+	file    string
+	parents []string // parent type names from tstype:",extends"
+}
+
+// pyConstEntry holds a collected const decl for emission
+type pyConstEntry struct {
+	decl *ast.GenDecl
+	file string
+}
+
+// topSortTypes performs a topological sort on types so parents are emitted before children.
+// Falls back to original order for types without parent dependencies.
+func topSortTypes(entries []pyTypeEntry) []pyTypeEntry {
+	// Build name -> index map
+	nameIdx := make(map[string]int, len(entries))
+	for i, e := range entries {
+		nameIdx[e.spec.Name.Name] = i
+	}
+
+	// Kahn's algorithm
+	inDegree := make([]int, len(entries))
+	children := make([][]int, len(entries))
+	for i, e := range entries {
+		for _, p := range e.parents {
+			if pi, ok := nameIdx[p]; ok {
+				inDegree[i]++
+				children[pi] = append(children[pi], i)
+			}
+		}
+	}
+
+	// Seed queue with zero in-degree entries (in original order for stability)
+	queue := make([]int, 0, len(entries))
+	for i, deg := range inDegree {
+		if deg == 0 {
+			queue = append(queue, i)
+		}
+	}
+
+	sorted := make([]pyTypeEntry, 0, len(entries))
+	for len(queue) > 0 {
+		idx := queue[0]
+		queue = queue[1:]
+		sorted = append(sorted, entries[idx])
+		for _, child := range children[idx] {
+			inDegree[child]--
+			if inDegree[child] == 0 {
+				queue = append(queue, child)
+			}
+		}
+	}
+
+	// Append any remaining (cycle) entries at the end
+	if len(sorted) < len(entries) {
+		for i, deg := range inDegree {
+			if deg > 0 {
+				sorted = append(sorted, entries[i])
+			}
+		}
+	}
+
+	return sorted
+}
+
 // GeneratePythonTraced generates Python types with dependency tracing
 func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 	s := new(strings.Builder)
@@ -192,7 +293,6 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 
 	// Track seen type names to skip duplicates
 	seenTypes := make(map[string]bool)
-	writtenHeaders := make(map[string]bool)
 	// Track string type aliases for StrEnum generation
 	stringTypeAliases := make(map[string]bool)
 	// Track int type aliases for IntEnum generation
@@ -226,13 +326,16 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 	// Build enum member map (Go const name -> Python enum reference)
 	enumMembers := g.buildEnumMemberMap(stringTypeAliases, intTypeAliases)
 
+	// Collect all type entries and const entries
+	var typeEntries []pyTypeEntry
+	var constEntries []pyConstEntry
+
 	for i, file := range g.pkg.Syntax {
 		if g.conf.IsFileIgnored(g.GoFiles[i]) {
 			continue
 		}
 
 		filename := g.GoFiles[i]
-		wroteHeader := false
 
 		for _, decl := range file.Decls {
 			genDecl, ok := decl.(*ast.GenDecl)
@@ -246,30 +349,15 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 					if !ok || !ts.Name.IsExported() {
 						continue
 					}
-
-					// Only emit if this type is included
 					if !includedTypes[ts.Name.Name] {
 						continue
 					}
-
-					// Skip duplicate type names
 					if seenTypes[ts.Name.Name] {
 						continue
 					}
 					seenTypes[ts.Name.Name] = true
-
-					// Skip string/int type aliases (they become enums with consts)
 					if stringTypeAliases[ts.Name.Name] || intTypeAliases[ts.Name.Name] {
 						continue
-					}
-
-					// Write file header if not yet written
-					if !wroteHeader {
-						parts := strings.Split(filename, "/")
-						fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-						s.WriteString(fileComment)
-						wroteHeader = true
-						writtenHeaders[filename] = true
 					}
 
 					doc := ""
@@ -278,10 +366,28 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 					} else if genDecl.Doc != nil {
 						doc = strings.TrimSpace(genDecl.Doc.Text())
 					}
-					g.writePyType(s, ts, doc)
+
+					var deps []string
+					switch t := ts.Type.(type) {
+					case *ast.StructType:
+						if t.Fields != nil {
+							deps = g.collectPyParentTypes(t.Fields.List)
+						}
+					case *ast.Ident:
+						// Type alias (e.g. type Foo = Bar) depends on target
+						if !isBuiltinType(t.Name) && t.Name != "any" {
+							deps = []string{t.Name}
+						}
+					}
+
+					typeEntries = append(typeEntries, pyTypeEntry{
+						spec:    ts,
+						doc:     doc,
+						file:    filename,
+						parents: deps,
+					})
 				}
 			} else if genDecl.Tok == token.CONST {
-				// Check if any constants are for included types
 				shouldEmit := false
 				for _, spec := range genDecl.Specs {
 					if vs, ok := spec.(*ast.ValueSpec); ok && vs.Type != nil {
@@ -294,26 +400,45 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 					}
 				}
 				if shouldEmit {
-					if !wroteHeader {
-						parts := strings.Split(filename, "/")
-						fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-						s.WriteString(fileComment)
-						wroteHeader = true
-						writtenHeaders[filename] = true
-					}
-					g.writePyConsts(s, genDecl, stringTypeAliases, intTypeAliases, enumMembers)
+					constEntries = append(constEntries, pyConstEntry{decl: genDecl, file: filename})
 				}
 			}
 		}
 	}
 
+	// Topologically sort types so parents/targets are emitted before dependents
+	typeEntries = topSortTypes(typeEntries)
+
+	// Emit types
+	writtenHeaders := make(map[string]bool)
+	lastFile := ""
+	for _, entry := range typeEntries {
+		if entry.file != lastFile {
+			if !writtenHeaders[entry.file] {
+				parts := strings.Split(entry.file, "/")
+				fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
+				s.WriteString(fileComment)
+				writtenHeaders[entry.file] = true
+			}
+			lastFile = entry.file
+		}
+		g.writePyType(s, entry.spec, entry.doc)
+	}
+
+	// Emit constants
+	for _, entry := range constEntries {
+		if !writtenHeaders[entry.file] {
+			parts := strings.Split(entry.file, "/")
+			fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
+			s.WriteString(fileComment)
+			writtenHeaders[entry.file] = true
+		}
+		g.writePyConsts(s, entry.decl, stringTypeAliases, intTypeAliases, enumMembers)
+	}
+
 	return s.String(), nil
 }
 
-type typeSpecWithDoc struct {
-	spec *ast.TypeSpec
-	doc  string
-}
 
 func (g *PackageGenerator) writePyType(s *strings.Builder, ts *ast.TypeSpec, doc string) {
 	switch t := ts.Type.(type) {

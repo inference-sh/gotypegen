@@ -67,6 +67,10 @@
         "tag"
       ]
     },
+    "Application": {
+      "description": "Application is a type alias for App.",
+      "$ref": "#/$defs/App"
+    },
     "Base": {
       "type": "object",
       "description": "Base holds common fields for all models.",

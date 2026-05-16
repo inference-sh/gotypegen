@@ -98,6 +98,9 @@ type unexportedType struct {
 	field string
 }
 
+// Application is a type alias for App.
+type Application = App
+
 // Unreferenced is not referenced by any entry type.
 type Unreferenced struct {
 	Data string `json:"data"`
