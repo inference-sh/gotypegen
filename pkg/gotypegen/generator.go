@@ -57,10 +57,15 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 		return err
 	}
 
-	// Index loaded packages by path
+	// Index loaded packages by path (check both PkgPath and ID)
 	pkgsByPath := make(map[string]*packages.Package)
 	for _, pkg := range pkgs {
-		pkgsByPath[pkg.PkgPath] = pkg
+		if pkg.PkgPath != "" {
+			pkgsByPath[pkg.PkgPath] = pkg
+		}
+		if pkg.ID != "" && pkg.ID != pkg.PkgPath {
+			pkgsByPath[pkg.ID] = pkg
+		}
 	}
 
 	for i, pkg := range pkgs {
