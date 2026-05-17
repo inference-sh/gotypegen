@@ -281,6 +281,20 @@ func (g *PackageGenerator) generateGoFile(
 						continue
 					}
 
+					// Skip type aliases that become self-referential after inlining
+					// e.g., `type MetaItemType = shared.MetaItemType` → `type MetaItemType = MetaItemType`
+					if ts.Assign.IsValid() {
+						if sel, ok := ts.Type.(*ast.SelectorExpr); ok {
+							if ident, ok := sel.X.(*ast.Ident); ok && fileImports != nil {
+								if path, exists := fileImports[ident.Name]; exists {
+									if g.conf.IsInlinePackage(path) && sel.Sel.Name == ts.Name.Name {
+										continue
+									}
+								}
+							}
+						}
+					}
+
 					writeHeader()
 
 					doc := ts.Doc
