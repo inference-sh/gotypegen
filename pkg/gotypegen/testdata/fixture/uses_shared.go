@@ -17,3 +17,7 @@ type Document struct {
 func (d Document) IsPublic() bool {
 	return d.Visibility == shared.VisibilityPublic
 }
+
+// Visibility is a type alias for shared.Visibility — tests that
+// self-referential aliases are skipped when inlined.
+type Visibility = shared.Visibility

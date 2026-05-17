@@ -91,3 +91,8 @@ export interface Document extends Base {
   status: any /* shared.Status */;
   cover?: any /* shared.FileRef */;
 }
+/**
+ * Visibility is a type alias for shared.Visibility — tests that
+ * self-referential aliases are skipped when inlined.
+ */
+export type Visibility = any /* shared.Visibility */;

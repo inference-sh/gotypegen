@@ -162,3 +162,7 @@ type Document struct {
 	Status shared.Status `json:"status"`
 	Cover *shared.FileRef `json:"cover,omitempty"`
 }
+
+// Visibility is a type alias for shared.Visibility — tests that
+// self-referential aliases are skipped when inlined.
+type Visibility shared.Visibility

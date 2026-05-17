@@ -687,6 +687,28 @@ func TestGoInlinePackageMethodsIncluded(t *testing.T) {
 	mustContain(t, code, "func (d Document) IsPublic() bool")
 }
 
+func TestGoInlineSelfReferentialAliasSkipped(t *testing.T) {
+	gen := loadFixtureWithInline(t, &PackageConfig{
+		GoPackage:      "types",
+		KeepTags:       []string{"json"},
+		InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// shared/ defines `type Visibility string`
+	// uses_shared.go defines `type Visibility = shared.Visibility`
+	// After inlining, the alias becomes `type Visibility = Visibility` — must be skipped.
+	// The real definition from shared/ should remain.
+	mustContain(t, code, "type Visibility string")
+
+	// Must NOT contain the self-referential alias form
+	mustNotContain(t, code, "type Visibility = Visibility")
+	mustNotContain(t, code, "type Visibility Visibility")
+}
+
 func TestGoInlinePackageOutputCompiles(t *testing.T) {
 	gen := loadFixtureWithInline(t, &PackageConfig{
 		GoPackage:      "types",

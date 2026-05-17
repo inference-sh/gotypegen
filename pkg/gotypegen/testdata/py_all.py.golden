@@ -40,6 +40,14 @@ class AppVersion(TypedDict, total=False):
 class Unreferenced(TypedDict, total=False):
     data: str
 
+
+##########
+# source: uses_shared.go
+
+
+##########
+# source: types.go
+
 # App represents an application.
 class App(Base, TypedDict, total=False):
     name: str
