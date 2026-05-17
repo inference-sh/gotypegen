@@ -97,6 +97,32 @@
         "updated_at"
       ]
     },
+    "Document": {
+      "type": "object",
+      "description": "Document uses types from the shared package.",
+      "properties": {
+        "cover": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "visibility": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "visibility",
+        "status"
+      ]
+    },
     "Local": {
       "type": "object",
       "properties": {

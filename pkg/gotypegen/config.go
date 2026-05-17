@@ -90,6 +90,12 @@ type PackageConfig struct {
 	// If empty/nil, all tags are kept (backwards-compatible).
 	// Only used by the Go output format.
 	KeepTags []string `yaml:"keep_tags"`
+
+	// InlinePackages lists import paths whose types should be flattened into the output.
+	// References like `shared.TaskStatus` become just `TaskStatus` in the generated code,
+	// and the types from those packages are included in the output.
+	// Only used by the Go output format.
+	InlinePackages []string `yaml:"inline_packages"`
 }
 
 type Config struct {
@@ -216,6 +222,27 @@ func (c PackageConfig) ShouldKeepTag(key string) bool {
 		}
 	}
 	return false
+}
+
+// IsInlinePackage returns true if the given import path should be inlined
+// (types emitted directly without package prefix).
+func (c PackageConfig) IsInlinePackage(importPath string) bool {
+	for _, p := range c.InlinePackages {
+		if p == importPath {
+			return true
+		}
+	}
+	return false
+}
+
+// InlinePackageLocalName returns the local package name for an inlined import path,
+// or empty string if it's not inlined. Used to match against file import maps.
+func (c PackageConfig) InlinePackageLocalName(importPath string) string {
+	if !c.IsInlinePackage(importPath) {
+		return ""
+	}
+	parts := strings.Split(importPath, "/")
+	return parts[len(parts)-1]
 }
 
 func (c PackageConfig) ResolvedOutputPath(packageDir string) string {

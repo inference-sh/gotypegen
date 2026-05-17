@@ -18,16 +18,51 @@ func (g *PackageGenerator) GenerateGo() (string, error) {
 	return g.generateGoAll()
 }
 
+// inlinePkgPaths returns a set of inline package paths for use with FilterMethods.
+func (g *PackageGenerator) inlinePkgPaths() map[string]bool {
+	if len(g.inlinePkgs) == 0 {
+		return nil
+	}
+	paths := make(map[string]bool)
+	for _, pkg := range g.inlinePkgs {
+		if pkg.PkgPath != "" {
+			paths[pkg.PkgPath] = true
+		} else {
+			paths[pkg.ID] = true
+		}
+	}
+	return paths
+}
+
 // generateGoAll emits all types (non-trace mode).
 func (g *PackageGenerator) generateGoAll() (string, error) {
 	graph := g.BuildTypeGraph()
+
+	// Also merge inline package types
+	for _, inlinePkg := range g.inlinePkgs {
+		inlineGen := &PackageGenerator{
+			conf:    g.conf,
+			GoFiles: inlinePkg.GoFiles,
+			pkg:     inlinePkg,
+		}
+		inlineGraph := inlineGen.BuildTypeGraph()
+		for name, info := range inlineGraph.Types {
+			graph.Types[name] = info
+		}
+		for file, types := range inlineGraph.FileTypes {
+			graph.FileTypes[file] = types
+		}
+		for typeName, methods := range inlineGraph.Methods {
+			graph.Methods[typeName] = append(graph.Methods[typeName], methods...)
+		}
+	}
 
 	// Include all exported types
 	allTypes := make(map[string]bool)
 	for name := range graph.Types {
 		allTypes[name] = true
 	}
-	allMethods := FilterMethods(graph, allTypes, g.pkg.TypesInfo, g.pkg.Types.Scope())
+	allMethods := FilterMethods(graph, allTypes, g.pkg.TypesInfo, g.pkg.Types.Scope(), g.inlinePkgPaths())
 
 	s := new(strings.Builder)
 	g.writeGoHeader(s)
@@ -47,6 +82,19 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 		g.generateGoFile(body, file, fp, nil, allMethods, fileImports, imports)
 	}
 
+	// Process inline package files
+	for _, inlinePkg := range g.inlinePkgs {
+		inlineAllMethods := FilterMethods(graph, allTypes, inlinePkg.TypesInfo, inlinePkg.Types.Scope(), g.inlinePkgPaths())
+		for i, file := range inlinePkg.Syntax {
+			fp := inlinePkg.GoFiles[i]
+			if g.conf.IsFileIgnored(fp) {
+				continue
+			}
+			fileImports := buildImportMap(file)
+			g.generateGoFile(body, file, fp, nil, inlineAllMethods, fileImports, imports)
+		}
+	}
+
 	g.writeGoImports(s, imports)
 	s.WriteString(body.String())
 
@@ -56,8 +104,28 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 // GenerateGoTraced emits only traced types + their filtered methods.
 func (g *PackageGenerator) GenerateGoTraced() (string, error) {
 	graph := g.BuildTypeGraph()
+
+	// Also build graphs for inline packages and merge their types
+	for _, inlinePkg := range g.inlinePkgs {
+		inlineGen := &PackageGenerator{
+			conf:    g.conf,
+			GoFiles: inlinePkg.GoFiles,
+			pkg:     inlinePkg,
+		}
+		inlineGraph := inlineGen.BuildTypeGraph()
+		for name, info := range inlineGraph.Types {
+			graph.Types[name] = info
+		}
+		for file, types := range inlineGraph.FileTypes {
+			graph.FileTypes[file] = types
+		}
+		for typeName, methods := range inlineGraph.Methods {
+			graph.Methods[typeName] = append(graph.Methods[typeName], methods...)
+		}
+	}
+
 	includedTypes := g.TraceTypes(graph)
-	filteredMethods := FilterMethods(graph, includedTypes, g.pkg.TypesInfo, g.pkg.Types.Scope())
+	filteredMethods := FilterMethods(graph, includedTypes, g.pkg.TypesInfo, g.pkg.Types.Scope(), g.inlinePkgPaths())
 
 	s := new(strings.Builder)
 	g.writeGoHeader(s)
@@ -65,6 +133,7 @@ func (g *PackageGenerator) GenerateGoTraced() (string, error) {
 	imports := newGoImportCollector()
 	body := new(strings.Builder)
 
+	// Process main package files
 	for i, file := range g.pkg.Syntax {
 		fp := g.GoFiles[i]
 		if g.conf.IsFileIgnored(fp) {
@@ -72,6 +141,19 @@ func (g *PackageGenerator) GenerateGoTraced() (string, error) {
 		}
 		fileImports := buildImportMap(file)
 		g.generateGoFile(body, file, fp, includedTypes, filteredMethods, fileImports, imports)
+	}
+
+	// Process inline package files
+	for _, inlinePkg := range g.inlinePkgs {
+		inlineFilteredMethods := FilterMethods(graph, includedTypes, inlinePkg.TypesInfo, inlinePkg.Types.Scope(), g.inlinePkgPaths())
+		for i, file := range inlinePkg.Syntax {
+			fp := inlinePkg.GoFiles[i]
+			if g.conf.IsFileIgnored(fp) {
+				continue
+			}
+			fileImports := buildImportMap(file)
+			g.generateGoFile(body, file, fp, includedTypes, inlineFilteredMethods, fileImports, imports)
+		}
 	}
 
 	g.writeGoImports(s, imports)
@@ -689,10 +771,17 @@ func (g *PackageGenerator) writeGoExpr(
 
 	case *ast.SelectorExpr:
 		if ident, ok := t.X.(*ast.Ident); ok {
-			// Register import
-			if fileImports != nil && imports != nil {
+			// Check if this package is inlined — emit just the selector name
+			if fileImports != nil {
 				if path, exists := fileImports[ident.Name]; exists {
-					imports.Add(path)
+					if g.conf.IsInlinePackage(path) {
+						s.WriteString(t.Sel.Name)
+						return
+					}
+					// Register import for non-inlined packages
+					if imports != nil {
+						imports.Add(path)
+					}
 				}
 			}
 			s.WriteString(ident.Name)

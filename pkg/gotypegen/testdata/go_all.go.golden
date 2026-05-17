@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"
 )
 
 // --------------------
@@ -146,4 +148,17 @@ type Application App
 // Unreferenced is not referenced by any entry type.
 type Unreferenced struct {
 	Data string `json:"data"`
+}
+
+// --------------------
+// source: uses_shared.go
+// --------------------
+
+// Document uses types from the shared package.
+type Document struct {
+	Base `json:",inline" tstype:",extends" gorm:"embedded"`
+	Title string `json:"title"`
+	Visibility shared.Visibility `json:"visibility"`
+	Status shared.Status `json:"status"`
+	Cover *shared.FileRef `json:"cover,omitempty"`
 }

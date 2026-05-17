@@ -476,6 +476,7 @@ func TestGoImportsCollected(t *testing.T) {
 func TestGoOutputCompiles(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		GoPackage: "types", GoModule: "example.com/roundtrip", KeepTags: []string{"json"},
+		ExcludeFiles: []string{"uses_shared.go"},
 	})
 	code, err := gen.GenerateGo()
 	if err != nil {
@@ -511,6 +512,186 @@ func TestGoTracedOutputCompiles(t *testing.T) {
 	cmd.Dir = tmpDir
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("generated code does not compile:\n%s\n\nCode:\n%s", output, code)
+	}
+}
+
+// ============================================================
+// Inline packages tests
+// ============================================================
+
+// loadFixtureWithInline loads the fixture package plus inline packages.
+func loadFixtureWithInline(t *testing.T, conf *PackageConfig) *PackageGenerator {
+	t.Helper()
+
+	fixtureDir, err := filepath.Abs("testdata/fixture")
+	if err != nil {
+		t.Fatalf("abs path: %v", err)
+	}
+
+	normalized, err := conf.Normalize()
+	if err != nil {
+		t.Fatalf("normalize config: %v", err)
+	}
+
+	// Load main package + inline packages together
+	loadPaths := []string{"."}
+	loadPaths = append(loadPaths, normalized.InlinePackages...)
+
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedSyntax | packages.NeedFiles | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
+		Dir:  fixtureDir,
+	}, loadPaths...)
+	if err != nil {
+		t.Fatalf("load packages: %v", err)
+	}
+
+	var mainPkg *packages.Package
+	var inlinePkgs []*packages.Package
+
+	for _, pkg := range pkgs {
+		if len(pkg.Errors) > 0 {
+			t.Fatalf("package errors (%s): %v", pkg.ID, pkg.Errors)
+		}
+		isInline := false
+		for _, ip := range normalized.InlinePackages {
+			// Check both PkgPath and ID since PkgPath can be empty in some load modes
+			if pkg.PkgPath == ip || pkg.ID == ip {
+				isInline = true
+				inlinePkgs = append(inlinePkgs, pkg)
+				break
+			}
+		}
+		if !isInline {
+			mainPkg = pkg
+		}
+	}
+
+	if mainPkg == nil {
+		t.Fatal("main package not found")
+	}
+
+	return &PackageGenerator{
+		conf:       &normalized,
+		pkg:        mainPkg,
+		GoFiles:    mainPkg.GoFiles,
+		inlinePkgs: inlinePkgs,
+	}
+}
+
+func TestGoInlinePackageTypesIncluded(t *testing.T) {
+	gen := loadFixtureWithInline(t, &PackageConfig{
+		GoPackage:      "types",
+		KeepTags:       []string{"json"},
+		InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Shared types should be emitted without package prefix
+	mustContain(t, code, "type Visibility string")
+	mustContain(t, code, "type Status int")
+	mustContain(t, code, "type FileRef struct {")
+	mustContain(t, code, "VisibilityPublic")
+	mustContain(t, code, "VisibilityPrivate")
+}
+
+func TestGoInlinePackageReferencesFlattened(t *testing.T) {
+	gen := loadFixtureWithInline(t, &PackageConfig{
+		GoPackage:      "types",
+		KeepTags:       []string{"json"},
+		InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Document type should reference Visibility/Status/FileRef without shared. prefix
+	mustContain(t, code, "type Document struct {")
+	mustContain(t, code, "Visibility Visibility")
+	mustContain(t, code, "Status Status")
+	mustContain(t, code, "*FileRef")
+
+	// Must NOT contain shared. prefix
+	mustNotContain(t, code, "shared.Visibility")
+	mustNotContain(t, code, "shared.Status")
+	mustNotContain(t, code, "shared.FileRef")
+
+	// Must NOT import the shared package
+	mustNotContain(t, code, "fixture/shared")
+}
+
+func TestGoInlinePackageTracedMode(t *testing.T) {
+	gen := loadFixtureWithInline(t, &PackageConfig{
+		GoPackage:      "types",
+		Mode:           "trace",
+		EntryFiles:     []string{"api.go", "uses_shared.go"},
+		KeepTags:       []string{"json"},
+		InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Document is in the entry file, so it should be traced
+	mustContain(t, code, "type Document struct {")
+
+	// Shared types reachable from Document should be included
+	mustContain(t, code, "type Visibility string")
+	mustContain(t, code, "type FileRef struct {")
+
+	// Struct field references should be flattened (no shared. prefix)
+	mustNotContain(t, code, "shared.Visibility")
+	mustNotContain(t, code, "shared.Status")
+	mustNotContain(t, code, "shared.FileRef")
+
+	// Method bodies should also use flattened references
+	mustNotContain(t, code, "shared.VisibilityPublic")
+
+	// Must NOT import the shared package
+	mustNotContain(t, code, "fixture/shared")
+}
+
+func TestGoInlinePackageMethodsIncluded(t *testing.T) {
+	gen := loadFixtureWithInline(t, &PackageConfig{
+		GoPackage:      "types",
+		KeepTags:       []string{"json"},
+		InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Methods from the inline package should be included
+	mustContain(t, code, "func (s Status) String() string")
+	// Document.IsPublic uses shared.VisibilityPublic — should be included since it's a const
+	mustContain(t, code, "func (d Document) IsPublic() bool")
+}
+
+func TestGoInlinePackageOutputCompiles(t *testing.T) {
+	gen := loadFixtureWithInline(t, &PackageConfig{
+		GoPackage:      "types",
+		GoModule:       "example.com/inline-test",
+		KeepTags:       []string{"json"},
+		InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+	})
+	code, err := gen.GenerateGo()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpDir := t.TempDir()
+	os.WriteFile(filepath.Join(tmpDir, "types.go"), []byte(code), 0644)
+	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(gen.GenerateGoMod()), 0644)
+
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = tmpDir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code with inlined packages does not compile:\n%s\n\nCode:\n%s", output, code)
 	}
 }
 

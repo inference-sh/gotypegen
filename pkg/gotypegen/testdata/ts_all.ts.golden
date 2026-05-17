@@ -78,3 +78,16 @@ export interface Unreferenced {
 export interface Local {
   name: string;
 }
+
+//////////
+// source: uses_shared.go
+
+/**
+ * Document uses types from the shared package.
+ */
+export interface Document extends Base {
+  title: string;
+  visibility: any /* shared.Visibility */;
+  status: any /* shared.Status */;
+  cover?: any /* shared.FileRef */;
+}

@@ -20,6 +20,9 @@ type PackageGenerator struct {
 	conf    *PackageConfig
 	pkg     *packages.Package
 	GoFiles []string
+
+	// inlinePkgs holds packages whose types are flattened into the output.
+	inlinePkgs []*packages.Package
 }
 
 func New(config *Config) *Generator {
@@ -41,14 +44,38 @@ func (g *Generator) Generate() error {
 
 // GenerateWithFormats generates output for specified formats: typescript, jsonschema, python
 func (g *Generator) GenerateWithFormats(formats []string) error {
+	// Collect all packages to load: configured packages + inline packages
+	loadPaths := g.conf.PackageNames()
+	for _, pc := range g.conf.Packages {
+		loadPaths = append(loadPaths, pc.InlinePackages...)
+	}
+
 	pkgs, err := packages.Load(&packages.Config{
 		Mode: packages.NeedSyntax | packages.NeedFiles | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedImports,
-	}, g.conf.PackageNames()...)
+	}, loadPaths...)
 	if err != nil {
 		return err
 	}
 
+	// Index loaded packages by path
+	pkgsByPath := make(map[string]*packages.Package)
+	for _, pkg := range pkgs {
+		pkgsByPath[pkg.PkgPath] = pkg
+	}
+
 	for i, pkg := range pkgs {
+		// Skip packages that are only loaded as inline dependencies
+		isMainPkg := false
+		for _, name := range g.conf.PackageNames() {
+			if pkg.ID == name || pkg.PkgPath == name {
+				isMainPkg = true
+				break
+			}
+		}
+		if !isMainPkg {
+			continue
+		}
+
 		if len(pkg.Errors) > 0 {
 			return fmt.Errorf("%+v", pkg.Errors)
 		}
@@ -60,10 +87,19 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 		pkgConfig := g.conf.PackageConfig(pkg.ID)
 		pkgDir := filepath.Dir(pkg.GoFiles[0])
 
+		// Resolve inline packages
+		var inlinePkgs []*packages.Package
+		for _, inlinePath := range pkgConfig.InlinePackages {
+			if inlinePkg, ok := pkgsByPath[inlinePath]; ok {
+				inlinePkgs = append(inlinePkgs, inlinePkg)
+			}
+		}
+
 		pkgGen := &PackageGenerator{
-			conf:    pkgConfig,
-			GoFiles: pkg.GoFiles,
-			pkg:     pkg,
+			conf:       pkgConfig,
+			GoFiles:    pkg.GoFiles,
+			pkg:        pkg,
+			inlinePkgs: inlinePkgs,
 		}
 		g.packageGenerators[pkg.PkgPath] = pkgGen
 

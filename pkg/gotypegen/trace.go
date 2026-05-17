@@ -38,6 +38,9 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 		Methods: make(map[string][]*MethodInfo),
 	}
 
+	// Build set of inline package local names for reference tracing
+	inlineLocalNames := g.buildInlineLocalNames()
+
 	for i, file := range g.pkg.Syntax {
 		filepath := g.GoFiles[i]
 
@@ -56,7 +59,7 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 						File:       filepath,
 						TypeSpec:   ts,
 						GenDecl:    d,
-						References: collectTypeReferences(ts.Type, g.conf.TypeMappings),
+						References: collectTypeReferences(ts.Type, g.conf.TypeMappings, inlineLocalNames),
 					}
 					graph.Types[typeName] = info
 					graph.FileTypes[filepath] = append(graph.FileTypes[filepath], typeName)
@@ -84,6 +87,20 @@ func (g *PackageGenerator) BuildTypeGraph() *TypeGraph {
 	}
 
 	return graph
+}
+
+// buildInlineLocalNames returns a set of local package names that are inlined.
+// E.g., if InlinePackages contains "foo/bar/shared", this returns {"shared": true}.
+func (g *PackageGenerator) buildInlineLocalNames() map[string]bool {
+	if len(g.conf.InlinePackages) == 0 {
+		return nil
+	}
+	names := make(map[string]bool)
+	for _, path := range g.conf.InlinePackages {
+		parts := strings.Split(path, "/")
+		names[parts[len(parts)-1]] = true
+	}
+	return names
 }
 
 // buildImportMap returns a map from local package name to import path for a file.
@@ -133,7 +150,13 @@ func isStdlib(importPath string) bool {
 // FilterMethods returns methods on included types that compile in isolation.
 // Uses go/types for exact identifier resolution instead of name-matching heuristics.
 // Iteratively filters: if method A calls method B which is filtered, A is also filtered.
-func FilterMethods(graph *TypeGraph, includedTypes map[string]bool, info *types.Info, pkgScope *types.Scope) map[string][]*MethodInfo {
+// Optional allowedPkgPaths are external packages whose types are considered available (e.g., inlined packages).
+func FilterMethods(graph *TypeGraph, includedTypes map[string]bool, info *types.Info, pkgScope *types.Scope, allowedPkgPaths ...map[string]bool) map[string][]*MethodInfo {
+	var allowed map[string]bool
+	if len(allowedPkgPaths) > 0 {
+		allowed = allowedPkgPaths[0]
+	}
+
 	// First pass: check each method can compile standalone
 	result := make(map[string][]*MethodInfo)
 	for typeName, methods := range graph.Methods {
@@ -141,7 +164,7 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool, info *types.
 			continue
 		}
 		for _, m := range methods {
-			if methodCanCompile(m.FuncDecl, includedTypes, info, pkgScope) {
+			if methodCanCompile(m.FuncDecl, includedTypes, info, pkgScope, allowed) {
 				result[typeName] = append(result[typeName], m)
 			}
 		}
@@ -185,7 +208,9 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool, info *types.
 // methodCanCompile checks if a method's body and signature only reference
 // things that will be available in the generated output: stdlib packages,
 // included types, constants, builtins, and local variables.
-func methodCanCompile(fn *ast.FuncDecl, includedTypes map[string]bool, info *types.Info, pkgScope *types.Scope) bool {
+// allowedPkgs is an optional set of external package paths that are considered available
+// (e.g., inline packages whose types are emitted into the output).
+func methodCanCompile(fn *ast.FuncDecl, includedTypes map[string]bool, info *types.Info, pkgScope *types.Scope, allowedPkgs map[string]bool) bool {
 	canCompile := true
 
 	check := func(n ast.Node) bool {
@@ -209,8 +234,9 @@ func methodCanCompile(fn *ast.FuncDecl, includedTypes map[string]bool, info *typ
 
 		// Check if the object is in our package
 		if obj.Pkg().Scope() != pkgScope {
-			// External package — only allow stdlib
-			if !isStdlib(obj.Pkg().Path()) {
+			// External package — allow stdlib and inline packages
+			pkgPath := obj.Pkg().Path()
+			if !isStdlib(pkgPath) && !allowedPkgs[pkgPath] {
 				canCompile = false
 				return false
 			}
@@ -317,9 +343,15 @@ func collectMethodCalls(fn *ast.FuncDecl, info *types.Info, pkgScope *types.Scop
 	return calls
 }
 
-// collectTypeReferences extracts all type names referenced by an expression
-func collectTypeReferences(expr ast.Expr, typeMappings map[string]string) []string {
+// collectTypeReferences extracts all type names referenced by an expression.
+// inlineLocalNames is the set of local package names (e.g. "shared") that are inlined.
+// References to inlined packages (e.g. shared.TaskStatus) are traced as "TaskStatus".
+func collectTypeReferences(expr ast.Expr, typeMappings map[string]string, inlineLocalNames ...map[string]bool) []string {
 	refs := []string{}
+	var inlineNames map[string]bool
+	if len(inlineLocalNames) > 0 {
+		inlineNames = inlineLocalNames[0]
+	}
 
 	var collect func(e ast.Expr)
 	collect = func(e ast.Expr) {
@@ -352,7 +384,11 @@ func collectTypeReferences(expr ast.Expr, typeMappings map[string]string) []stri
 				}
 			}
 		case *ast.SelectorExpr:
-			// External package reference — not traced
+			// If the package is inlined, trace the selector as a local type reference
+			if ident, ok := t.X.(*ast.Ident); ok && inlineNames != nil && inlineNames[ident.Name] {
+				refs = append(refs, t.Sel.Name)
+			}
+			// Otherwise: external package reference — not traced
 		case *ast.IndexExpr:
 			collect(t.X)
 			collect(t.Index)

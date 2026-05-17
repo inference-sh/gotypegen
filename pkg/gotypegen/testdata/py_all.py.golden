@@ -48,6 +48,21 @@ class App(Base, TypedDict, total=False):
     tags: List[str]
     metadata: Dict[str, Any]
 
+
+##########
+# source: uses_shared.go
+
+# Document uses types from the shared package.
+class Document(Base, TypedDict, total=False):
+    title: str
+    visibility: Any
+    status: Any
+    cover: Optional[Any]
+
+
+##########
+# source: types.go
+
 # Application is a type alias for App.
 Application = App
 
