@@ -79,6 +79,21 @@ func TestGolden(t *testing.T) {
 		golden.Assert(t, code, "go_traced.go.golden")
 	})
 
+	t.Run("go/inline", func(t *testing.T) {
+		gen := loadFixtureWithInline(t, &PackageConfig{
+			GoPackage:      "apitypes",
+			Mode:           "trace",
+			EntryFiles:     []string{"api.go", "uses_shared.go"},
+			KeepTags:       []string{"json"},
+			InlinePackages: []string{"github.com/inference-sh/gotypegen/pkg/gotypegen/testdata/fixture/shared"},
+		})
+		code, err := gen.GenerateGo()
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Assert(t, code, "go_inline.go.golden")
+	})
+
 	// --- TypeScript output ---
 
 	t.Run("ts/all", func(t *testing.T) {
