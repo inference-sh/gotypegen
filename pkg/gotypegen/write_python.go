@@ -779,12 +779,25 @@ func (g *PackageGenerator) writePyStrEnum(s *strings.Builder, decl *ast.GenDecl,
 	s.WriteString("\n")
 }
 
-// toUpperSnake converts CamelCase to UPPER_SNAKE_CASE
+// toUpperSnake converts CamelCase to UPPER_SNAKE_CASE.
+// Consecutive uppercase runs (acronyms) are kept together:
+//
+//	"HTTP" -> "HTTP", "MCP" -> "MCP", "HTTPServer" -> "HTTP_SERVER",
+//	"ToolType" -> "TOOL_TYPE", "getHTTPResponse" -> "GET_HTTP_RESPONSE"
 func toUpperSnake(s string) string {
+	runes := []rune(s)
 	var result strings.Builder
-	for i, r := range s {
+	for i, r := range runes {
 		if i > 0 && r >= 'A' && r <= 'Z' {
-			result.WriteByte('_')
+			prev := runes[i-1]
+			// Insert _ when transitioning from lowercase to uppercase (e.g. tool|T)
+			if prev >= 'a' && prev <= 'z' {
+				result.WriteByte('_')
+			} else if prev >= 'A' && prev <= 'Z' && i+1 < len(runes) && runes[i+1] >= 'a' && runes[i+1] <= 'z' {
+				// Insert _ before the last letter of an acronym followed by lowercase
+				// e.g. HT|Tp in "HTTPServer" -> HTTP_SERVER
+				result.WriteByte('_')
+			}
 		}
 		if r >= 'a' && r <= 'z' {
 			result.WriteByte(byte(r - 'a' + 'A'))
