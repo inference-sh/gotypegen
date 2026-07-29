@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -16,7 +17,17 @@ import (
 
 func main() {
 	formatFlag := flag.String("format", "typescript", "Output formats (comma-separated): typescript, jsonschema, python, go")
+	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
+
+	if *versionFlag {
+		v := "dev"
+		if bi, ok := debug.ReadBuildInfo(); ok {
+			v = bi.Main.Version
+		}
+		fmt.Println(v)
+		return
+	}
 
 	configPath := "gotypegen.yaml"
 	if flag.NArg() > 0 {
