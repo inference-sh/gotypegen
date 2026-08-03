@@ -170,3 +170,10 @@ func (a App) ShadowedName() string {
 func (a App) HasVersion(v AppVersion) bool {
 	return a.Version != nil && a.Version.Tag == v.Tag
 }
+
+// ProtocolMeta has JSON tags with dots and slashes that are not valid
+// identifiers in Python or JavaScript — the generators must handle them.
+type ProtocolMeta struct {
+	ServerInfo *AppVersion `json:"io.modelcontextprotocol/serverInfo,omitempty"`
+	TTLMs      *int64      `json:"ttlMs,omitempty"`
+}

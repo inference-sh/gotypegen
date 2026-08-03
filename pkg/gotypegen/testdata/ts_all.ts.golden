@@ -78,6 +78,14 @@ export interface Unreferenced {
 export interface Local {
   name: string;
 }
+/**
+ * ProtocolMeta has JSON tags with dots and slashes that are not valid
+ * identifiers in Python or JavaScript — the generators must handle them.
+ */
+export interface ProtocolMeta {
+  'io.modelcontextprotocol/serverInfo'?: AppVersion;
+  ttlMs?: number /* int64 */;
+}
 
 //////////
 // source: uses_shared.go

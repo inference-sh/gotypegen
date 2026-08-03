@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"regexp"
 	"strings"
 
 	"github.com/fatih/structtag"
 )
+
+var validPyNameRegexp = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 // enumMemberInfo stores the Python enum type and member name for a Go const
 type enumMemberInfo struct {
@@ -494,6 +497,15 @@ func (g *PackageGenerator) writePyMapAlias(s *strings.Builder, name string, m *a
 	s.WriteString("\n\n")
 }
 
+// pyFieldInfo holds the resolved names for a single struct field.
+type pyFieldInfo struct {
+	jsonName string
+	pyName   string
+	pyType   string
+	doc      string
+	needsAlias bool
+}
+
 func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st *ast.StructType, doc string) {
 	if doc != "" {
 		s.WriteString("# ")
@@ -503,6 +515,21 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 
 	parents := g.collectPyParentTypes(st.Fields.List)
 	pydantic := g.conf.IsPydantic()
+
+	// Collect fields and check if any need the functional TypedDict form.
+	fields := g.collectPyFields(st)
+	needsFunctional := false
+	for _, f := range fields {
+		if f.needsAlias && !pydantic {
+			needsFunctional = true
+			break
+		}
+	}
+
+	if needsFunctional {
+		g.writePyFunctionalTypedDict(s, name, fields, parents)
+		return
+	}
 
 	s.WriteString("class ")
 	s.WriteString(name)
@@ -517,12 +544,94 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("TypedDict, total=False):\n")
 	}
 
-	if st.Fields == nil || len(st.Fields.List) == 0 {
+	if len(fields) == 0 {
 		s.WriteString("    pass\n\n")
 		return
 	}
 
-	hasFields := false
+	for _, f := range fields {
+		if f.doc != "" {
+			s.WriteString("    # ")
+			s.WriteString(strings.ReplaceAll(f.doc, "\n", "\n    # "))
+			s.WriteString("\n")
+		}
+
+		s.WriteString("    ")
+		s.WriteString(f.pyName)
+		s.WriteString(": ")
+
+		isOptional := strings.HasPrefix(f.pyType, "Optional[")
+
+		if pydantic && f.needsAlias {
+			s.WriteString(f.pyType)
+			s.WriteString(" = Field(")
+			if isOptional {
+				s.WriteString("default=None, ")
+			}
+			s.WriteString("alias=\"")
+			s.WriteString(f.jsonName)
+			s.WriteString("\")")
+		} else {
+			s.WriteString(f.pyType)
+			if pydantic && isOptional {
+				s.WriteString(" = None")
+			}
+		}
+
+		s.WriteString("\n")
+	}
+
+	s.WriteString("\n")
+}
+
+// writePyFunctionalTypedDict emits the functional form:
+//
+//	Name = TypedDict('Name', {'non.identifier': Type, ...}, total=False)
+//
+// Used when a struct has JSON tags that are not valid Python identifiers.
+func (g *PackageGenerator) writePyFunctionalTypedDict(s *strings.Builder, name string, fields []pyFieldInfo, parents []string) {
+	if len(parents) > 0 {
+		// Functional form doesn't support inheritance directly; emit a base
+		// class and inherit from it plus the functional dict.
+		s.WriteString(name)
+		s.WriteString(" = TypedDict('")
+		s.WriteString(name)
+		s.WriteString("', {")
+	} else {
+		s.WriteString(name)
+		s.WriteString(" = TypedDict('")
+		s.WriteString(name)
+		s.WriteString("', {")
+	}
+
+	if len(fields) == 0 {
+		s.WriteString("}, total=False)\n\n")
+		return
+	}
+
+	s.WriteString("\n")
+	for _, f := range fields {
+		if f.doc != "" {
+			s.WriteString("    # ")
+			s.WriteString(strings.ReplaceAll(f.doc, "\n", "\n    # "))
+			s.WriteString("\n")
+		}
+		s.WriteString("    '")
+		s.WriteString(f.jsonName)
+		s.WriteString("': ")
+		s.WriteString(f.pyType)
+		s.WriteString(",\n")
+	}
+	s.WriteString("}, total=False)\n\n")
+}
+
+// collectPyFields extracts the field list for a struct, resolving JSON names
+// and detecting fields that need aliasing.
+func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
+	if st.Fields == nil {
+		return nil
+	}
+	var fields []pyFieldInfo
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 {
 			continue
@@ -540,39 +649,48 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 				jsonName = fieldName.Name
 			}
 
-			hasFields = true
+			pyName := jsonName
+			needsAlias := false
+			if !validPyNameRegexp.MatchString(jsonName) {
+				pyName = sanitizePyName(jsonName)
+				needsAlias = true
+			} else if isPythonKeyword(jsonName) {
+				pyName = jsonName + "_"
+			}
 
+			var docStr string
 			if field.Doc != nil {
-				fieldDoc := strings.TrimSpace(field.Doc.Text())
-				s.WriteString("    # ")
-				s.WriteString(strings.ReplaceAll(fieldDoc, "\n", "\n    # "))
-				s.WriteString("\n")
+				docStr = strings.TrimSpace(field.Doc.Text())
 			}
 
-			s.WriteString("    ")
-			pyFieldName := jsonName
-			if isPythonKeyword(jsonName) {
-				pyFieldName = jsonName + "_"
-			}
-			s.WriteString(pyFieldName)
-			s.WriteString(": ")
-
-			pyType := g.exprToPythonType(field.Type)
-			isOptional := strings.HasPrefix(pyType, "Optional[")
-			s.WriteString(pyType)
-
-			if pydantic && isOptional {
-				s.WriteString(" = None")
-			}
-
-			s.WriteString("\n")
+			fields = append(fields, pyFieldInfo{
+				jsonName:   jsonName,
+				pyName:     pyName,
+				pyType:     g.exprToPythonType(field.Type),
+				doc:        docStr,
+				needsAlias: needsAlias,
+			})
 		}
 	}
+	return fields
+}
 
-	if !hasFields {
-		s.WriteString("    pass\n")
+// sanitizePyName replaces characters invalid in Python identifiers with
+// underscores and ensures the result starts with a letter or underscore.
+func sanitizePyName(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '_' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('_')
+		}
 	}
-	s.WriteString("\n")
+	s := b.String()
+	if s == "" || (s[0] >= '0' && s[0] <= '9') {
+		s = "_" + s
+	}
+	return s
 }
 
 // collectPyParentTypes extracts parent type names from embedded fields

@@ -134,6 +134,21 @@
         "name"
       ]
     },
+    "ProtocolMeta": {
+      "type": "object",
+      "description": "ProtocolMeta has JSON tags with dots and slashes that are not valid\nidentifiers in Python or JavaScript — the generators must handle them.",
+      "properties": {
+        "io.modelcontextprotocol/serverInfo": {
+          "$ref": "#/$defs/AppVersion"
+        },
+        "ttlMs": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
     "SDKTypes": {
       "type": "object",
       "description": "SDKTypes is a phantom type that pulls types into the trace."

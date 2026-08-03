@@ -965,6 +965,61 @@ func TestPyTracedParentClassOrdering(t *testing.T) {
 	}
 }
 
+// --- Non-identifier JSON tags ---
+
+func TestPySanitizeName(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"normal", "normal"},
+		{"io.modelcontextprotocol/serverInfo", "io_modelcontextprotocol_serverInfo"},
+		{"a-b", "a_b"},
+		{"123start", "_123start"},
+		{"", "_"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			got := sanitizePyName(tt.in)
+			if got != tt.want {
+				t.Errorf("sanitizePyName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			if !validPyNameRegexp.MatchString(got) {
+				t.Errorf("sanitizePyName(%q) = %q is not a valid Python identifier", tt.in, got)
+			}
+		})
+	}
+}
+
+func TestPyNonIdentifierJsonTag(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mustContain(t, code, "TypedDict('ProtocolMeta'")
+	mustContain(t, code, "'io.modelcontextprotocol/serverInfo'")
+	mustNotContain(t, code, "class ProtocolMeta")
+
+	// The functional form must be valid Python — no bare identifiers with dots.
+	if strings.Contains(code, "    io.modelcontextprotocol") {
+		t.Error("non-identifier JSON tag must not appear as a bare Python field name")
+	}
+}
+
+func TestPyNonIdentifierJsonTag_Pydantic(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pydantic mode uses class syntax with Field(alias=...)
+	mustContain(t, code, "class ProtocolMeta")
+	mustContain(t, code, `alias="io.modelcontextprotocol/serverInfo"`)
+	mustContain(t, code, "io_modelcontextprotocol_serverInfo")
+}
+
 func mustNotContain(t *testing.T, s, substr string) {
 	t.Helper()
 	if strings.Contains(s, substr) {

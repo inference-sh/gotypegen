@@ -150,6 +150,13 @@ type Unreferenced struct {
 	Data string `json:"data"`
 }
 
+// ProtocolMeta has JSON tags with dots and slashes that are not valid
+// identifiers in Python or JavaScript — the generators must handle them.
+type ProtocolMeta struct {
+	ServerInfo *AppVersion `json:"io.modelcontextprotocol/serverInfo,omitempty"`
+	TTLMs *int64 `json:"ttlMs,omitempty"`
+}
+
 // --------------------
 // source: uses_shared.go
 // --------------------
