@@ -618,9 +618,9 @@ func (g *PackageGenerator) writePyFunctionalTypedDict(s *strings.Builder, name s
 		}
 		s.WriteString("    '")
 		s.WriteString(f.jsonName)
-		s.WriteString("': ")
+		s.WriteString("': '")
 		s.WriteString(f.pyType)
-		s.WriteString(",\n")
+		s.WriteString("',\n")
 	}
 	s.WriteString("}, total=False)\n\n")
 }
