@@ -76,6 +76,12 @@ type PackageConfig struct {
 	// Useful for usage with JSON marshalers that output null for optional fields (e.g. gofiber JSON).
 	OptionalType string `yaml:"optional_type"`
 
+	// PythonStyle controls the Python output style.
+	// Supported values: "typeddict" (default), "pydantic".
+	// In "typeddict" mode, structs emit as TypedDict classes.
+	// In "pydantic" mode, structs emit as pydantic BaseModel classes.
+	PythonStyle string `yaml:"python_style"`
+
 	// GoPackage is the package name for generated Go files (e.g. "types").
 	// Only used by the Go output format.
 	GoPackage string `yaml:"go_package"`
@@ -182,6 +188,11 @@ func (c PackageConfig) IsFileIgnored(pathToFile string) bool {
 	}
 
 	return false
+}
+
+// IsPydantic returns true if the Python output should use pydantic BaseModel
+func (c PackageConfig) IsPydantic() bool {
+	return c.PythonStyle == "pydantic"
 }
 
 // IsTraceMode returns true if the config is set to trace dependencies
