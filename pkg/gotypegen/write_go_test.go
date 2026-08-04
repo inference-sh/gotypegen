@@ -1020,6 +1020,99 @@ func TestPyNonIdentifierJsonTag_Pydantic(t *testing.T) {
 	mustContain(t, code, "io_modelcontextprotocol_serverInfo")
 }
 
+// ============================================================
+// Behavioral tests — Python pydantic mode
+// ============================================================
+
+func TestPyPydanticBaseModel(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mustContain(t, code, "from pydantic import BaseModel")
+	mustContain(t, code, "class App(Base, BaseModel):")
+	mustContain(t, code, "class Base(BaseModel):")
+	mustNotContain(t, code, "TypedDict")
+}
+
+func TestPyPydanticZeroValueDefaults(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-pointer string field should get = ""
+	mustContain(t, code, `name: str = ""`)
+	// Non-pointer bool field
+	mustContain(t, code, "success: bool = False")
+}
+
+func TestPyPydanticOptionalDefaults(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pointer fields should be Optional[...] = None
+	mustContain(t, code, "deleted_at: Optional[Any] = None")
+	mustContain(t, code, "version: Optional[AppVersion] = None")
+}
+
+func TestPyPydanticModelRebuild(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mustContain(t, code, "# Resolve forward references")
+	mustContain(t, code, "App.model_rebuild()")
+	mustContain(t, code, "Base.model_rebuild()")
+}
+
+func TestPyPydanticTracedMode(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		PythonStyle: "pydantic",
+		Mode:        "trace",
+		EntryFiles:  []string{"api.go"},
+	})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mustContain(t, code, "class App(Base, BaseModel):")
+	mustContain(t, code, "model_rebuild()")
+	mustNotContain(t, code, "class Unreferenced")
+}
+
+func TestPyZeroValue(t *testing.T) {
+	tests := []struct {
+		pyType, want string
+	}{
+		{"str", `""`},
+		{"int", "0"},
+		{"float", "0.0"},
+		{"bool", "False"},
+		{"List[str]", ""},
+		{"Dict[str, Any]", ""},
+		{"AppVersion", ""},
+		{"Optional[str]", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.pyType, func(t *testing.T) {
+			got := pyZeroValue(tt.pyType)
+			if got != tt.want {
+				t.Errorf("pyZeroValue(%q) = %q, want %q", tt.pyType, got, tt.want)
+			}
+		})
+	}
+}
+
 func mustNotContain(t *testing.T, s, substr string) {
 	t.Helper()
 	if strings.Contains(s, substr) {

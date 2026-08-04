@@ -148,6 +148,11 @@ func (g *PackageGenerator) GeneratePython() (string, error) {
 		g.writePyConsts(s, entry.decl, stringTypeAliases, intTypeAliases, enumMembers)
 	}
 
+	// Pydantic: rebuild models to resolve forward references
+	if g.conf.IsPydantic() {
+		g.writePyModelRebuilds(s, typeEntries, stringTypeAliases, intTypeAliases)
+	}
+
 	return s.String(), nil
 }
 
@@ -429,6 +434,11 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 		g.writePyConsts(s, entry.decl, stringTypeAliases, intTypeAliases, enumMembers)
 	}
 
+	// Pydantic: rebuild models to resolve forward references
+	if g.conf.IsPydantic() {
+		g.writePyModelRebuilds(s, typeEntries, stringTypeAliases, intTypeAliases)
+	}
+
 	return s.String(), nil
 }
 
@@ -567,14 +577,23 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 			s.WriteString(" = Field(")
 			if isOptional {
 				s.WriteString("default=None, ")
+			} else if zv := pyZeroValue(f.pyType); zv != "" {
+				s.WriteString("default=")
+				s.WriteString(zv)
+				s.WriteString(", ")
 			}
 			s.WriteString("alias=\"")
 			s.WriteString(f.jsonName)
 			s.WriteString("\")")
 		} else {
 			s.WriteString(f.pyType)
-			if pydantic && isOptional {
-				s.WriteString(" = None")
+			if pydantic {
+				if isOptional {
+					s.WriteString(" = None")
+				} else if zv := pyZeroValue(f.pyType); zv != "" {
+					s.WriteString(" = ")
+					s.WriteString(zv)
+				}
 			}
 		}
 
@@ -1103,6 +1122,48 @@ func (g *PackageGenerator) tsMappingToPython(mapping string) string {
 		return fmt.Sprintf("Optional[%s]", pyType)
 	}
 	return pyType
+}
+
+// writePyModelRebuilds emits model_rebuild() calls for all pydantic BaseModel
+// classes to resolve forward references created by `from __future__ import annotations`.
+func (g *PackageGenerator) writePyModelRebuilds(s *strings.Builder, entries []pyTypeEntry, stringAliases, intAliases map[string]bool) {
+	var models []string
+	for _, e := range entries {
+		name := e.spec.Name.Name
+		if stringAliases[name] || intAliases[name] {
+			continue
+		}
+		if _, ok := e.spec.Type.(*ast.StructType); ok {
+			models = append(models, name)
+		}
+	}
+	if len(models) == 0 {
+		return
+	}
+	s.WriteString("\n# Resolve forward references\n")
+	for _, m := range models {
+		s.WriteString(m)
+		s.WriteString(".model_rebuild()\n")
+	}
+	s.WriteString("\n")
+}
+
+// pyZeroValue returns the Python default literal for scalar types that
+// correspond to Go value types (non-pointer). Returns "" for complex
+// types (lists, dicts, custom classes) which stay required.
+func pyZeroValue(pyType string) string {
+	switch pyType {
+	case "str":
+		return `""`
+	case "int":
+		return "0"
+	case "float":
+		return "0.0"
+	case "bool":
+		return "False"
+	default:
+		return ""
+	}
 }
 
 var pythonKeywords = map[string]bool{
