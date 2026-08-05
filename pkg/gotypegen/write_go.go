@@ -750,8 +750,13 @@ func (g *PackageGenerator) emitCompanionFuncs(
 			}
 		}
 	}
-	for _, fn := range companions {
-		g.writeGoFunc(body, fn, mergedImports, imports)
+	names := make([]string, 0, len(companions))
+	for name := range companions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		g.writeGoFunc(body, companions[name], mergedImports, imports)
 	}
 }
 

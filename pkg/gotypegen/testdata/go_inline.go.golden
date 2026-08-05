@@ -208,10 +208,10 @@ func (f FileRef) IsImage() bool {
 // --------------------
 // companion functions
 // --------------------
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
 // helperFunc is a package-level function (not emitted in trace mode).
 func helperFunc() string {
 	return "helper"
-}
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
