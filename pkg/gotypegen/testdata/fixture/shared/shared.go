@@ -38,3 +38,12 @@ type FileRef struct {
 	MimeType string `json:"mime_type"`
 	Size     int64  `json:"size"`
 }
+
+// IsImage returns true if the file is an image.
+func (f FileRef) IsImage() bool {
+	return hasPrefix(f.MimeType, "image/")
+}
+
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}

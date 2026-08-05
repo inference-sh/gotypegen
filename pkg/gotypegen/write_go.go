@@ -83,8 +83,12 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 	}
 
 	// Process inline package files
+	allInlineMethodsNonTraced := make(map[string][]*MethodInfo)
 	for _, inlinePkg := range g.inlinePkgs {
 		inlineAllMethods := FilterMethods(graph, allTypes, inlinePkg.TypesInfo, inlinePkg.Types.Scope(), g.inlinePkgPaths())
+		for k, v := range inlineAllMethods {
+			allInlineMethodsNonTraced[k] = append(allInlineMethodsNonTraced[k], v...)
+		}
 		for i, file := range inlinePkg.Syntax {
 			fp := inlinePkg.GoFiles[i]
 			if g.conf.IsFileIgnored(fp) {
@@ -94,6 +98,9 @@ func (g *PackageGenerator) generateGoAll() (string, error) {
 			g.generateGoFile(body, file, fp, nil, inlineAllMethods, fileImports, imports)
 		}
 	}
+
+	// Collect and emit companion functions
+	g.emitCompanionFuncs(body, graph, allMethods, allInlineMethodsNonTraced, imports)
 
 	g.writeGoImports(s, imports)
 	s.WriteString(body.String())
@@ -144,8 +151,12 @@ func (g *PackageGenerator) GenerateGoTraced() (string, error) {
 	}
 
 	// Process inline package files
+	allInlineMethods := make(map[string][]*MethodInfo)
 	for _, inlinePkg := range g.inlinePkgs {
 		inlineFilteredMethods := FilterMethods(graph, includedTypes, inlinePkg.TypesInfo, inlinePkg.Types.Scope(), g.inlinePkgPaths())
+		for k, v := range inlineFilteredMethods {
+			allInlineMethods[k] = append(allInlineMethods[k], v...)
+		}
 		for i, file := range inlinePkg.Syntax {
 			fp := inlinePkg.GoFiles[i]
 			if g.conf.IsFileIgnored(fp) {
@@ -155,6 +166,9 @@ func (g *PackageGenerator) GenerateGoTraced() (string, error) {
 			g.generateGoFile(body, file, fp, includedTypes, inlineFilteredMethods, fileImports, imports)
 		}
 	}
+
+	// Collect and emit companion functions
+	g.emitCompanionFuncs(body, graph, filteredMethods, allInlineMethods, imports)
 
 	g.writeGoImports(s, imports)
 	s.WriteString(body.String())
@@ -688,6 +702,73 @@ func (g *PackageGenerator) writeGoMethod(
 	g.writeGoFuncSignature(s, fn.Type, fileImports, imports)
 
 	// Body
+	if fn.Body != nil {
+		s.WriteString(" ")
+		g.writeGoBlockStmt(s, fn.Body, fileImports, imports)
+	}
+
+	s.WriteString("\n")
+}
+
+// emitCompanionFuncs collects unexported helper functions needed by the included
+// methods and writes them to the output.
+func (g *PackageGenerator) emitCompanionFuncs(
+	body *strings.Builder,
+	graph *TypeGraph,
+	mainMethods map[string][]*MethodInfo,
+	inlineMethods map[string][]*MethodInfo,
+	imports *goImportCollector,
+) {
+	companions := make(map[string]*ast.FuncDecl)
+
+	mainCompanions := CollectCompanionFuncs(graph, mainMethods, g.pkg.Syntax, g.GoFiles, g.pkg.TypesInfo, g.pkg.Types.Scope())
+	for name, fn := range mainCompanions {
+		companions[name] = fn
+	}
+	for _, inlinePkg := range g.inlinePkgs {
+		inlineCompanions := CollectCompanionFuncs(graph, inlineMethods, inlinePkg.Syntax, inlinePkg.GoFiles, inlinePkg.TypesInfo, inlinePkg.Types.Scope())
+		for name, fn := range inlineCompanions {
+			companions[name] = fn
+		}
+	}
+
+	if len(companions) == 0 {
+		return
+	}
+
+	body.WriteString("\n// --------------------\n// companion functions\n// --------------------\n")
+	mergedImports := make(map[string]string)
+	for _, file := range g.pkg.Syntax {
+		for k, v := range buildImportMap(file) {
+			mergedImports[k] = v
+		}
+	}
+	for _, inlinePkg := range g.inlinePkgs {
+		for _, file := range inlinePkg.Syntax {
+			for k, v := range buildImportMap(file) {
+				mergedImports[k] = v
+			}
+		}
+	}
+	for _, fn := range companions {
+		g.writeGoFunc(body, fn, mergedImports, imports)
+	}
+}
+
+func (g *PackageGenerator) writeGoFunc(
+	s *strings.Builder,
+	fn *ast.FuncDecl,
+	fileImports map[string]string,
+	imports *goImportCollector,
+) {
+	if fn.Doc != nil && g.PreserveTypeComments() {
+		writeGoComment(s, fn.Doc, "")
+	}
+
+	s.WriteString("func ")
+	s.WriteString(fn.Name.Name)
+	g.writeGoFuncSignature(s, fn.Type, fileImports, imports)
+
 	if fn.Body != nil {
 		s.WriteString(" ")
 		g.writeGoBlockStmt(s, fn.Body, fileImports, imports)

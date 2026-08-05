@@ -323,7 +323,7 @@ func TestGoTracedLocalTypeRefFiltered(t *testing.T) {
 	mustContain(t, code, "MarshalApp")
 }
 
-func TestGoTracedPkgFuncFiltered(t *testing.T) {
+func TestGoTracedPkgFuncEmittedAsCompanion(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		GoPackage: "types", Mode: "trace", EntryFiles: []string{"api.go"}, KeepTags: []string{"json"},
 	})
@@ -332,9 +332,9 @@ func TestGoTracedPkgFuncFiltered(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// UsesHelper calls helperFunc (package-level) — should be filtered
-	mustNotContain(t, code, "UsesHelper")
-	mustNotContain(t, code, "helperFunc")
+	// UsesHelper calls helperFunc — both should be emitted (helperFunc as companion)
+	mustContain(t, code, "UsesHelper")
+	mustContain(t, code, "helperFunc")
 }
 
 func TestGoTracedPkgVarFiltered(t *testing.T) {

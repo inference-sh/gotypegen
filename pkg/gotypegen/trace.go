@@ -207,7 +207,8 @@ func FilterMethods(graph *TypeGraph, includedTypes map[string]bool, info *types.
 
 // methodCanCompile checks if a method's body and signature only reference
 // things that will be available in the generated output: stdlib packages,
-// included types, constants, builtins, and local variables.
+// included types, constants, builtins, local variables, and unexported
+// package-level functions (which will be emitted as companions).
 // allowedPkgs is an optional set of external package paths that are considered available
 // (e.g., inline packages whose types are emitted into the output).
 func methodCanCompile(fn *ast.FuncDecl, includedTypes map[string]bool, info *types.Info, pkgScope *types.Scope, allowedPkgs map[string]bool) bool {
@@ -246,10 +247,8 @@ func methodCanCompile(fn *ast.FuncDecl, includedTypes map[string]bool, info *typ
 		// Same package — classify the object
 		switch o := obj.(type) {
 		case *types.Func:
-			// Package-level function (not a method) — won't be in output
-			if o.Parent() == pkgScope {
-				canCompile = false
-			}
+			// Package-level functions are allowed — they'll be emitted as companions
+			_ = o
 		case *types.Var:
 			// Package-level var — won't be in output
 			if o.Parent() == pkgScope {
@@ -271,6 +270,93 @@ func methodCanCompile(fn *ast.FuncDecl, includedTypes map[string]bool, info *typ
 	ast.Inspect(fn, check)
 
 	return canCompile
+}
+
+// CollectCompanionFuncs finds unexported package-level functions that are
+// called (transitively) by the included methods. These must be emitted
+// alongside the methods for them to compile.
+func CollectCompanionFuncs(
+	graph *TypeGraph,
+	filteredMethods map[string][]*MethodInfo,
+	files []*ast.File,
+	goFiles []string,
+	info *types.Info,
+	pkgScope *types.Scope,
+) map[string]*ast.FuncDecl {
+	// Build index of all package-level functions (exported and unexported)
+	allFuncs := make(map[string]*ast.FuncDecl)
+	for i, file := range files {
+		_ = goFiles[i]
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv != nil {
+				continue // skip methods
+			}
+			allFuncs[fn.Name.Name] = fn
+		}
+	}
+
+	// Collect all unexported funcs needed by included methods (BFS)
+	needed := make(map[string]*ast.FuncDecl)
+	queue := []string{}
+
+	// Seed: unexported funcs called directly by included methods
+	for _, methods := range filteredMethods {
+		for _, m := range methods {
+			for _, name := range collectFuncCalls(m.FuncDecl, info, pkgScope) {
+				if _, inAll := allFuncs[name]; inAll {
+						if _, already := needed[name]; !already {
+							needed[name] = allFuncs[name]
+							queue = append(queue, name)
+						}
+					}
+			}
+		}
+	}
+
+	// BFS: functions called by companion functions
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		fn := needed[name]
+		for _, callee := range collectFuncCalls(fn, info, pkgScope) {
+			if _, inAll := allFuncs[callee]; inAll {
+				if _, already := needed[callee]; !already {
+					needed[callee] = allFuncs[callee]
+					queue = append(queue, callee)
+				}
+			}
+		}
+	}
+
+	return needed
+}
+
+// collectFuncCalls returns names of same-package package-level functions called by fn.
+func collectFuncCalls(fn *ast.FuncDecl, info *types.Info, pkgScope *types.Scope) []string {
+	var calls []string
+	if fn.Body == nil {
+		return calls
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		ident, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		obj, exists := info.Uses[ident]
+		if !exists {
+			return true
+		}
+		f, ok := obj.(*types.Func)
+		if !ok {
+			return true
+		}
+		if f.Pkg() != nil && f.Pkg().Scope() == pkgScope && f.Parent() == pkgScope {
+			calls = append(calls, f.Name())
+		}
+		return true
+	})
+	return calls
 }
 
 // buildMethodSet returns "TypeName.MethodName" strings for all methods in the map.

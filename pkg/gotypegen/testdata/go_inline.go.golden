@@ -77,6 +77,11 @@ func (a *App) Ref() string {
 	return a.Name
 }
 
+// UsesHelper calls a package-level function — should be filtered in trace mode.
+func (a App) UsesHelper() string {
+	return helperFunc()
+}
+
 // MarshalLocal uses a local type declaration inside the method body.
 func (a App) MarshalLocal() ([]byte, error) {
 	type Local struct {
@@ -193,4 +198,20 @@ type FileRef struct {
 	URL string `json:"url"`
 	MimeType string `json:"mime_type"`
 	Size int64 `json:"size"`
+}
+
+// IsImage returns true if the file is an image.
+func (f FileRef) IsImage() bool {
+	return hasPrefix(f.MimeType, "image/")
+}
+
+// --------------------
+// companion functions
+// --------------------
+// helperFunc is a package-level function (not emitted in trace mode).
+func helperFunc() string {
+	return "helper"
+}
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
 }
