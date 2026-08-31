@@ -126,7 +126,7 @@ func (g *PackageGenerator) writeTypeSpec(
 		s.WriteString(" {\n")
 		g.writeStructFields(s, st.Fields.List, 0)
 		s.WriteString("}")
-		g.writeTsFieldMeta(s, ts.Name.Name, st.Fields.List)
+		g.writeTsFieldTags(s, ts.Name.Name, st.Fields.List)
 	}
 
 	id, isIdent := ts.Type.(*ast.Ident)
@@ -266,9 +266,9 @@ func (g *PackageGenerator) writeValueSpec(
 	}
 }
 
-// writeTsFieldMeta emits a companion const with configured struct tag values.
+// writeTsFieldTags emits a companion const with configured struct tag values.
 // Only emitted when at least one field has a tag from the field_tags config.
-func (g *PackageGenerator) writeTsFieldMeta(s *strings.Builder, typeName string, fields []*ast.Field) {
+func (g *PackageGenerator) writeTsFieldTags(s *strings.Builder, typeName string, fields []*ast.Field) {
 	if len(g.conf.FieldTags) == 0 {
 		return
 	}
@@ -308,7 +308,7 @@ func (g *PackageGenerator) writeTsFieldMeta(s *strings.Builder, typeName string,
 
 	s.WriteString("\nexport const ")
 	s.WriteString(typeName)
-	s.WriteString("_fieldMeta = {\n")
+	s.WriteString("_fieldTags = {\n")
 	for _, e := range entries {
 		s.WriteString(g.conf.Indent)
 		s.WriteString(e.jsonName)

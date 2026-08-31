@@ -95,9 +95,9 @@ export interface StreamDelta {
  * MergeStrategy defines how a delta field should be merged.
  */
 export type MergeStrategy = string;
-export const MergeConcat: MergeStrategy = "concat";
-export const MergeReplace: MergeStrategy = "replace";
-export const MergeIndexed: MergeStrategy = "indexed";
+export const MergeStrategyConcat: MergeStrategy = "concat";
+export const MergeStrategyReplace: MergeStrategy = "replace";
+export const MergeStrategyIndexed: MergeStrategy = "indexed";
 /**
  * LLMDelta is a streaming delta with field-level merge strategies.
  */

@@ -601,8 +601,8 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("\n")
 	}
 
-	// Emit _field_meta if any fields have configured tags
-	g.writePyFieldMeta(s, name, fields)
+	// Emit _field_tags if any fields have configured tags
+	g.writePyFieldTags(s, name, fields)
 
 	s.WriteString("\n")
 }
@@ -732,10 +732,10 @@ func sanitizePyName(name string) string {
 	return s
 }
 
-// writePyFieldMeta emits a _field_meta class variable containing configured
+// writePyFieldTags emits a _field_tags class variable containing configured
 // struct tag values for each field. Only emitted when at least one field has
 // a tag from the field_tags config.
-func (g *PackageGenerator) writePyFieldMeta(s *strings.Builder, typeName string, fields []pyFieldInfo) {
+func (g *PackageGenerator) writePyFieldTags(s *strings.Builder, typeName string, fields []pyFieldInfo) {
 	// Check if any fields have tag metadata
 	hasMeta := false
 	for _, f := range fields {
@@ -748,7 +748,7 @@ func (g *PackageGenerator) writePyFieldMeta(s *strings.Builder, typeName string,
 		return
 	}
 
-	s.WriteString("\n    _field_meta = {\n")
+	s.WriteString("\n    _field_tags = {\n")
 	for _, f := range fields {
 		if len(f.tags) == 0 {
 			continue

@@ -1120,7 +1120,7 @@ func mustNotContain(t *testing.T, s, substr string) {
 	}
 }
 
-func TestPyFieldMeta(t *testing.T) {
+func TestPyFieldTags(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		PythonStyle: "pydantic",
 		FieldTags:   []string{"merge"},
@@ -1130,13 +1130,13 @@ func TestPyFieldMeta(t *testing.T) {
 		t.Fatalf("GeneratePython: %v", err)
 	}
 
-	mustContain(t, out, `_field_meta = {`)
+	mustContain(t, out, `_field_tags = {`)
 	mustContain(t, out, `"response": {"merge": "concat"}`)
 	mustContain(t, out, `"tool_calls": {"merge": "indexed"}`)
 	mustContain(t, out, `"usage": {"merge": "replace"}`)
 }
 
-func TestPyFieldMetaNotEmittedWithoutConfig(t *testing.T) {
+func TestPyFieldTagsNotEmittedWithoutConfig(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		PythonStyle: "pydantic",
 	})
@@ -1145,10 +1145,10 @@ func TestPyFieldMetaNotEmittedWithoutConfig(t *testing.T) {
 		t.Fatalf("GeneratePython: %v", err)
 	}
 
-	mustNotContain(t, out, `_field_meta`)
+	mustNotContain(t, out, `_field_tags`)
 }
 
-func TestPyFieldMetaTypedDict(t *testing.T) {
+func TestPyFieldTagsTypedDict(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		FieldTags: []string{"merge"},
 	})
@@ -1158,11 +1158,11 @@ func TestPyFieldMetaTypedDict(t *testing.T) {
 	}
 
 	// TypedDict mode should also emit field_meta
-	mustContain(t, out, `_field_meta = {`)
+	mustContain(t, out, `_field_tags = {`)
 	mustContain(t, out, `"response": {"merge": "concat"}`)
 }
 
-func TestTsFieldMeta(t *testing.T) {
+func TestTsFieldTags(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		FieldTags: []string{"merge"},
 	})
@@ -1171,23 +1171,23 @@ func TestTsFieldMeta(t *testing.T) {
 		t.Fatalf("Generate: %v", err)
 	}
 
-	mustContain(t, out, `LLMDelta_fieldMeta`)
+	mustContain(t, out, `LLMDelta_fieldTags`)
 	mustContain(t, out, `response: {merge: "concat"}`)
 	mustContain(t, out, `tool_calls: {merge: "indexed"}`)
 	mustContain(t, out, `usage: {merge: "replace"}`)
 }
 
-func TestTsFieldMetaNotEmittedWithoutConfig(t *testing.T) {
+func TestTsFieldTagsNotEmittedWithoutConfig(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{})
 	out, err := gen.Generate()
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 
-	mustNotContain(t, out, `_fieldMeta`)
+	mustNotContain(t, out, `_fieldTags`)
 }
 
-func TestFieldMetaMultipleTags(t *testing.T) {
+func TestFieldTagsMultipleTags(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		PythonStyle: "pydantic",
 		FieldTags:   []string{"merge", "json"},

@@ -170,9 +170,9 @@ type StreamDelta struct {
 type MergeStrategy string
 
 const (
-	MergeConcat MergeStrategy = "concat"
-	MergeReplace MergeStrategy = "replace"
-	MergeIndexed MergeStrategy = "indexed"
+	MergeStrategyConcat MergeStrategy = "concat"
+	MergeStrategyReplace MergeStrategy = "replace"
+	MergeStrategyIndexed MergeStrategy = "indexed"
 )
 
 // LLMDelta is a streaming delta with field-level merge strategies.

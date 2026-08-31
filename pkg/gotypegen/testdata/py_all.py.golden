@@ -117,7 +117,7 @@ class TaskStatus(IntEnum):
 # source: types.go
 
 class MergeStrategy(str, Enum):
-    MERGE_CONCAT = "concat"
-    MERGE_REPLACE = "replace"
-    MERGE_INDEXED = "indexed"
+    CONCAT = "concat"
+    REPLACE = "replace"
+    INDEXED = "indexed"
 
