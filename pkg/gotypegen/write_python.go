@@ -509,11 +509,12 @@ func (g *PackageGenerator) writePyMapAlias(s *strings.Builder, name string, m *a
 
 // pyFieldInfo holds the resolved names for a single struct field.
 type pyFieldInfo struct {
-	jsonName string
-	pyName   string
-	pyType   string
-	doc      string
+	jsonName   string
+	pyName     string
+	pyType     string
+	doc        string
 	needsAlias bool
+	tags       map[string]string // configured field_tags values (e.g. "merge" -> "concat")
 }
 
 func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st *ast.StructType, doc string) {
@@ -600,6 +601,9 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("\n")
 	}
 
+	// Emit _field_meta if any fields have configured tags
+	g.writePyFieldMeta(s, name, fields)
+
 	s.WriteString("\n")
 }
 
@@ -682,12 +686,28 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 				docStr = strings.TrimSpace(field.Doc.Text())
 			}
 
+			// Read configured field tags
+			var fieldTags map[string]string
+			if len(g.conf.FieldTags) > 0 && field.Tag != nil {
+				if tags, err := structtag.Parse(field.Tag.Value[1 : len(field.Tag.Value)-1]); err == nil {
+					for _, tagKey := range g.conf.FieldTags {
+						if tag, err := tags.Get(tagKey); err == nil {
+							if fieldTags == nil {
+								fieldTags = make(map[string]string)
+							}
+							fieldTags[tagKey] = tag.Name
+						}
+					}
+				}
+			}
+
 			fields = append(fields, pyFieldInfo{
 				jsonName:   jsonName,
 				pyName:     pyName,
 				pyType:     g.exprToPythonType(field.Type),
 				doc:        docStr,
 				needsAlias: needsAlias,
+				tags:       fieldTags,
 			})
 		}
 	}
@@ -710,6 +730,51 @@ func sanitizePyName(name string) string {
 		s = "_" + s
 	}
 	return s
+}
+
+// writePyFieldMeta emits a _field_meta class variable containing configured
+// struct tag values for each field. Only emitted when at least one field has
+// a tag from the field_tags config.
+func (g *PackageGenerator) writePyFieldMeta(s *strings.Builder, typeName string, fields []pyFieldInfo) {
+	// Check if any fields have tag metadata
+	hasMeta := false
+	for _, f := range fields {
+		if len(f.tags) > 0 {
+			hasMeta = true
+			break
+		}
+	}
+	if !hasMeta {
+		return
+	}
+
+	s.WriteString("\n    _field_meta = {\n")
+	for _, f := range fields {
+		if len(f.tags) == 0 {
+			continue
+		}
+		s.WriteString("        \"")
+		s.WriteString(f.jsonName)
+		s.WriteString("\": {")
+		first := true
+		for _, tagKey := range g.conf.FieldTags {
+			val, ok := f.tags[tagKey]
+			if !ok {
+				continue
+			}
+			if !first {
+				s.WriteString(", ")
+			}
+			s.WriteString("\"")
+			s.WriteString(tagKey)
+			s.WriteString("\": \"")
+			s.WriteString(val)
+			s.WriteString("\"")
+			first = false
+		}
+		s.WriteString("},\n")
+	}
+	s.WriteString("    }\n")
 }
 
 // collectPyParentTypes extracts parent type names from embedded fields

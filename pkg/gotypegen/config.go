@@ -102,6 +102,12 @@ type PackageConfig struct {
 	// and the types from those packages are included in the output.
 	// Only used by the Go output format.
 	InlinePackages []string `yaml:"inline_packages"`
+
+	// FieldTags lists struct tag keys to surface as field metadata in generated output.
+	// For each struct with tagged fields, a _field_meta dict (Python) or companion
+	// const (TypeScript) is emitted mapping field names to their tag values.
+	// Example: field_tags: ["merge"] surfaces `merge:"concat"` tags.
+	FieldTags []string `yaml:"field_tags"`
 }
 
 type Config struct {

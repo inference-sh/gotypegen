@@ -177,3 +177,24 @@ type ProtocolMeta struct {
 	ServerInfo *AppVersion `json:"io.modelcontextprotocol/serverInfo,omitempty"`
 	TTLMs      *int64      `json:"ttlMs,omitempty"`
 }
+
+// StreamDelta is a marker base for streaming delta types.
+type StreamDelta struct{}
+
+// MergeStrategy defines how a delta field should be merged.
+type MergeStrategy string
+
+const (
+	MergeConcat  MergeStrategy = "concat"
+	MergeReplace MergeStrategy = "replace"
+	MergeIndexed MergeStrategy = "indexed"
+)
+
+// LLMDelta is a streaming delta with field-level merge strategies.
+type LLMDelta struct {
+	StreamDelta `tstype:",extends"`
+	Response    string  `json:"response"             merge:"concat"`
+	Reasoning   *string `json:"reasoning,omitempty"   merge:"concat"`
+	ToolCalls   *[]Base `json:"tool_calls,omitempty"  merge:"indexed"`
+	Usage       *Base   `json:"usage,omitempty"       merge:"replace"`
+}

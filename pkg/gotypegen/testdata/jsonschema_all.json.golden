@@ -123,6 +123,36 @@
         "status"
       ]
     },
+    "LLMDelta": {
+      "type": "object",
+      "description": "LLMDelta is a streaming delta with field-level merge strategies.",
+      "properties": {
+        "reasoning": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "response": {
+          "type": "string"
+        },
+        "tool_calls": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/Base"
+          }
+        },
+        "usage": {
+          "$ref": "#/$defs/Base"
+        }
+      },
+      "required": [
+        "response"
+      ]
+    },
     "Local": {
       "type": "object",
       "properties": {
@@ -133,6 +163,10 @@
       "required": [
         "name"
       ]
+    },
+    "MergeStrategy": {
+      "type": "string",
+      "description": "MergeStrategy defines how a delta field should be merged."
     },
     "ProtocolMeta": {
       "type": "object",
@@ -152,6 +186,10 @@
     "SDKTypes": {
       "type": "object",
       "description": "SDKTypes is a phantom type that pulls types into the trace."
+    },
+    "StreamDelta": {
+      "type": "object",
+      "description": "StreamDelta is a marker base for streaming delta types."
     },
     "TaskStatus": {
       "type": "integer",

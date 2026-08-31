@@ -47,6 +47,10 @@ ProtocolMeta = TypedDict('ProtocolMeta', {
     'ttlMs': 'Optional[int]',
 }, total=False)
 
+# StreamDelta is a marker base for streaming delta types.
+class StreamDelta(TypedDict, total=False):
+    pass
+
 
 ##########
 # source: uses_shared.go
@@ -78,6 +82,13 @@ class Document(Base, TypedDict, total=False):
 ##########
 # source: types.go
 
+# LLMDelta is a streaming delta with field-level merge strategies.
+class LLMDelta(StreamDelta, TypedDict, total=False):
+    response: str
+    reasoning: Optional[str]
+    tool_calls: Optional[List[Base]]
+    usage: Optional[Base]
+
 # Application is a type alias for App.
 Application = App
 
@@ -100,4 +111,13 @@ class TaskStatus(IntEnum):
     RUNNING = 1
     COMPLETED = 2
     FAILED = 3
+
+
+##########
+# source: types.go
+
+class MergeStrategy(str, Enum):
+    MERGE_CONCAT = "concat"
+    MERGE_REPLACE = "replace"
+    MERGE_INDEXED = "indexed"
 

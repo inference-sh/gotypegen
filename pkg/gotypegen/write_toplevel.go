@@ -126,6 +126,7 @@ func (g *PackageGenerator) writeTypeSpec(
 		s.WriteString(" {\n")
 		g.writeStructFields(s, st.Fields.List, 0)
 		s.WriteString("}")
+		g.writeTsFieldMeta(s, ts.Name.Name, st.Fields.List)
 	}
 
 	id, isIdent := ts.Type.(*ast.Ident)
@@ -263,6 +264,73 @@ func (g *PackageGenerator) writeValueSpec(
 		}
 
 	}
+}
+
+// writeTsFieldMeta emits a companion const with configured struct tag values.
+// Only emitted when at least one field has a tag from the field_tags config.
+func (g *PackageGenerator) writeTsFieldMeta(s *strings.Builder, typeName string, fields []*ast.Field) {
+	if len(g.conf.FieldTags) == 0 {
+		return
+	}
+
+	type fieldTagEntry struct {
+		jsonName string
+		tags     map[string]string
+	}
+
+	var entries []fieldTagEntry
+	for _, f := range fields {
+		if f.Tag == nil || len(f.Names) == 0 {
+			continue
+		}
+		tags, err := structtag.Parse(f.Tag.Value[1 : len(f.Tag.Value)-1])
+		if err != nil {
+			continue
+		}
+		jsonTag, err := tags.Get("json")
+		if err != nil || jsonTag.Name == "-" {
+			continue
+		}
+		fieldTags := make(map[string]string)
+		for _, tagKey := range g.conf.FieldTags {
+			if tag, err := tags.Get(tagKey); err == nil {
+				fieldTags[tagKey] = tag.Name
+			}
+		}
+		if len(fieldTags) > 0 {
+			entries = append(entries, fieldTagEntry{jsonName: jsonTag.Name, tags: fieldTags})
+		}
+	}
+
+	if len(entries) == 0 {
+		return
+	}
+
+	s.WriteString("\nexport const ")
+	s.WriteString(typeName)
+	s.WriteString("_fieldMeta = {\n")
+	for _, e := range entries {
+		s.WriteString(g.conf.Indent)
+		s.WriteString(e.jsonName)
+		s.WriteString(": {")
+		first := true
+		for _, tagKey := range g.conf.FieldTags {
+			val, ok := e.tags[tagKey]
+			if !ok {
+				continue
+			}
+			if !first {
+				s.WriteString(", ")
+			}
+			s.WriteString(tagKey)
+			s.WriteString(": \"")
+			s.WriteString(val)
+			s.WriteString("\"")
+			first = false
+		}
+		s.WriteString("},\n")
+	}
+	s.WriteString("} as const;\n")
 }
 
 func getInheritedType(f ast.Expr, tag *structtag.Tag) (name string, valid bool) {

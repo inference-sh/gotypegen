@@ -1120,6 +1120,88 @@ func mustNotContain(t *testing.T, s, substr string) {
 	}
 }
 
+func TestPyFieldMeta(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		PythonStyle: "pydantic",
+		FieldTags:   []string{"merge"},
+	})
+	out, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+
+	mustContain(t, out, `_field_meta = {`)
+	mustContain(t, out, `"response": {"merge": "concat"}`)
+	mustContain(t, out, `"tool_calls": {"merge": "indexed"}`)
+	mustContain(t, out, `"usage": {"merge": "replace"}`)
+}
+
+func TestPyFieldMetaNotEmittedWithoutConfig(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		PythonStyle: "pydantic",
+	})
+	out, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+
+	mustNotContain(t, out, `_field_meta`)
+}
+
+func TestPyFieldMetaTypedDict(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		FieldTags: []string{"merge"},
+	})
+	out, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+
+	// TypedDict mode should also emit field_meta
+	mustContain(t, out, `_field_meta = {`)
+	mustContain(t, out, `"response": {"merge": "concat"}`)
+}
+
+func TestTsFieldMeta(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		FieldTags: []string{"merge"},
+	})
+	out, err := gen.Generate()
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	mustContain(t, out, `LLMDelta_fieldMeta`)
+	mustContain(t, out, `response: {merge: "concat"}`)
+	mustContain(t, out, `tool_calls: {merge: "indexed"}`)
+	mustContain(t, out, `usage: {merge: "replace"}`)
+}
+
+func TestTsFieldMetaNotEmittedWithoutConfig(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	out, err := gen.Generate()
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	mustNotContain(t, out, `_fieldMeta`)
+}
+
+func TestFieldMetaMultipleTags(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		PythonStyle: "pydantic",
+		FieldTags:   []string{"merge", "json"},
+	})
+	out, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+
+	// Should include both tag keys for fields that have merge tags
+	mustContain(t, out, `"merge": "concat"`)
+	mustContain(t, out, `"json": "response"`)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

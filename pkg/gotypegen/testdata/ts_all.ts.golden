@@ -86,6 +86,27 @@ export interface ProtocolMeta {
   'io.modelcontextprotocol/serverInfo'?: AppVersion;
   ttlMs?: number /* int64 */;
 }
+/**
+ * StreamDelta is a marker base for streaming delta types.
+ */
+export interface StreamDelta {
+}
+/**
+ * MergeStrategy defines how a delta field should be merged.
+ */
+export type MergeStrategy = string;
+export const MergeConcat: MergeStrategy = "concat";
+export const MergeReplace: MergeStrategy = "replace";
+export const MergeIndexed: MergeStrategy = "indexed";
+/**
+ * LLMDelta is a streaming delta with field-level merge strategies.
+ */
+export interface LLMDelta extends StreamDelta {
+  response: string;
+  reasoning?: string;
+  tool_calls?: Base[];
+  usage?: Base;
+}
 
 //////////
 // source: uses_shared.go
