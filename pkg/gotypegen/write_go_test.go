@@ -1130,7 +1130,7 @@ func TestPyFieldTags(t *testing.T) {
 		t.Fatalf("GeneratePython: %v", err)
 	}
 
-	mustContain(t, out, `_field_tags = {`)
+	mustContain(t, out, `_field_tags: ClassVar[dict] = {`)
 	mustContain(t, out, `"response": {"merge": "concat"}`)
 	mustContain(t, out, `"tool_calls": {"merge": "indexed"}`)
 	mustContain(t, out, `"usage": {"merge": "replace"}`)
@@ -1149,7 +1149,7 @@ func TestPyFieldTagsTracedMode(t *testing.T) {
 	}
 
 	mustContain(t, out, `class LLMDelta(StreamDelta`)
-	mustContain(t, out, `_field_tags = {`)
+	mustContain(t, out, `_field_tags: ClassVar[dict] = {`)
 	mustContain(t, out, `"response": {"merge": "concat"}`)
 	mustContain(t, out, `"usage": {"merge": "replace"}`)
 }

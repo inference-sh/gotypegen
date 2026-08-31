@@ -448,7 +448,7 @@ func (g *PackageGenerator) writePyHeader(s *strings.Builder) {
 	s.WriteString("from __future__ import annotations\n\n")
 	s.WriteString("from enum import Enum, IntEnum\n")
 	if g.conf.IsPydantic() {
-		s.WriteString("from typing import Any, Dict, List, Optional, Union\n")
+		s.WriteString("from typing import Any, ClassVar, Dict, List, Optional, Union\n")
 		s.WriteString("from pydantic import BaseModel\n")
 	} else {
 		s.WriteString("from typing import Any, Dict, List, Optional, TypedDict, Union\n")
@@ -748,7 +748,11 @@ func (g *PackageGenerator) writePyFieldTags(s *strings.Builder, typeName string,
 		return
 	}
 
-	s.WriteString("\n    _field_tags = {\n")
+	if g.conf.IsPydantic() {
+		s.WriteString("\n    _field_tags: ClassVar[dict] = {\n")
+	} else {
+		s.WriteString("\n    _field_tags = {\n")
+	}
 	for _, f := range fields {
 		if len(f.tags) == 0 {
 			continue
