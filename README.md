@@ -100,6 +100,58 @@ packages:
 - `inline_packages` — import paths whose types are flattened into the output (e.g. `shared.TaskStatus` becomes `TaskStatus`)
 - Methods on traced types are included if they only reference stdlib and other traced types
 
+### Field Tags
+
+Surface Go struct tags as queryable metadata on generated types. Consumers can read field-level semantics (merge strategies, privacy annotations, validation hints, etc.) without hardcoding field names.
+
+```yaml
+packages:
+  - path: "your/go/package"
+    output_path: "gen/types.py"
+    python_style: "pydantic"
+    field_tags:
+      - sensitivity
+```
+
+Go source:
+```go
+type UserProfile struct {
+    Name    string `json:"name"    sensitivity:"public"`
+    Email   string `json:"email"   sensitivity:"pii"`
+    APIKey  string `json:"api_key" sensitivity:"secret"`
+}
+```
+
+Python output (pydantic):
+```python
+class UserProfile(BaseModel):
+    name: str = ""
+    email: str = ""
+    api_key: str = ""
+
+    _field_tags: ClassVar[dict] = {
+        "name": {"sensitivity": "public"},
+        "email": {"sensitivity": "pii"},
+        "api_key": {"sensitivity": "secret"},
+    }
+```
+
+TypeScript output:
+```typescript
+export interface UserProfile {
+    name: string;
+    email: string;
+    api_key: string;
+}
+export const UserProfile_fieldTags = {
+    name: {sensitivity: "public"},
+    email: {sensitivity: "pii"},
+    api_key: {sensitivity: "secret"},
+} as const;
+```
+
+Only emitted for structs that have at least one field with a configured tag. No output when `field_tags` is not set.
+
 ### All Config Options
 
 | Option | Type | Default | Description |
@@ -122,6 +174,7 @@ packages:
 | `preserve_comments` | string | `"default"` | `"default"`, `"types"`, or `"none"` |
 | `optional_type` | string | `"undefined"` | TS optional: `"undefined"` or `"null"` |
 | `extends` | string | | Default interface for TS to extend |
+| `field_tags` | []string | | Struct tags to surface as field metadata |
 | `fallback_type` | string | `"any"` | Type for unrecognized Go types |
 
 ### Directives
