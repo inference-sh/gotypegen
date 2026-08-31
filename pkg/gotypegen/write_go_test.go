@@ -1136,6 +1136,24 @@ func TestPyFieldTags(t *testing.T) {
 	mustContain(t, out, `"usage": {"merge": "replace"}`)
 }
 
+func TestPyFieldTagsTracedMode(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{
+		PythonStyle: "pydantic",
+		FieldTags:   []string{"merge"},
+		Mode:        "trace",
+		ExtraTypes:  []string{"LLMDelta", "StreamDelta"},
+	})
+	out, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+
+	mustContain(t, out, `class LLMDelta(StreamDelta`)
+	mustContain(t, out, `_field_tags = {`)
+	mustContain(t, out, `"response": {"merge": "concat"}`)
+	mustContain(t, out, `"usage": {"merge": "replace"}`)
+}
+
 func TestPyFieldTagsNotEmittedWithoutConfig(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{
 		PythonStyle: "pydantic",
