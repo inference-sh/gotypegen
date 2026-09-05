@@ -121,7 +121,7 @@ type CallInput struct {
 }
 ```
 
-## Field Tags
+### Field Tags
 
 Surface Go struct tags as queryable metadata on generated types. Consumers can read field-level semantics (merge strategies, privacy annotations, validation hints, etc.) without hardcoding field names.
 
