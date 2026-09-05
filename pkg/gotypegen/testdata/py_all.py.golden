@@ -103,6 +103,11 @@ class LLMDelta(StreamDelta, TypedDict, total=False):
     tool_calls: Optional[List[Base]]
     usage: Optional[Base]
 
+# ExtendedCall inherits GenerationSettings (tstype extends): TS/pydantic get
+# a parent type, JSON Schema gets the parent's properties inlined.
+class ExtendedCall(GenerationSettings, TypedDict, total=False):
+    prompt: str
+
 # Application is a type alias for App.
 Application = App
 

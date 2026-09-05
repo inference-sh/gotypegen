@@ -190,7 +190,7 @@ func (g *PackageGenerator) structToJSONSchema(st *ast.StructType, description st
 		return schema
 	}
 
-	for _, field := range g.expandInlineFields(st.Fields.List) {
+	for _, field := range g.expandAllEmbeds(st.Fields.List) {
 		names := field.Names
 		if len(names) == 0 {
 			// json-named embed -> nested property (encoding/json semantics);

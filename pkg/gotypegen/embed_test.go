@@ -1,6 +1,9 @@
 package gotypegen
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Anonymous struct fields without a json name follow encoding/json: their
 // fields are promoted onto the embedding type. With a json name they stay
@@ -61,4 +64,37 @@ func TestJSONSchemaInlineEmbeddedStruct(t *testing.T) {
 	mustContain(t, out, `"GenerationSettings": {`)
 	mustNotContain(t, out, `"GenerationSettings": {"$ref"`)
 	mustNotContain(t, out, `"$ref": "#/$defs/GenerationSettings"`)
+}
+
+func TestExtendsInheritsInTsAndPy_InlinesInJSONSchema(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	ts, err := gen.Generate()
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	mustContain(t, ts, "export interface ExtendedCall extends GenerationSettings {")
+	mustNotContain(t, ts, "export interface ExtendedCall extends GenerationSettings {\n  temperature")
+
+	py, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+	mustContain(t, py, "class ExtendedCall(GenerationSettings")
+
+	js, err := gen.GenerateJSONSchema()
+	if err != nil {
+		t.Fatalf("GenerateJSONSchema: %v", err)
+	}
+	// Locate the ExtendedCall definition and check the parent's properties are on it.
+	i := strings.Index(js, `"ExtendedCall": {`)
+	if i < 0 {
+		t.Fatal("ExtendedCall missing from JSON schema")
+	}
+	block := js[i:]
+	if j := strings.Index(block[1:], "\n    \""); j > 0 {
+		block = block[:j+1]
+	}
+	mustContain(t, block, `"temperature"`)
+	mustContain(t, block, `"max_tokens"`)
+	mustContain(t, block, `"prompt"`)
 }

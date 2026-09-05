@@ -26,6 +26,18 @@
         "category": {
           "$ref": "#/$defs/AppCategory"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "deleted_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
         "metadata": {
           "type": "object",
           "additionalProperties": {}
@@ -39,11 +51,17 @@
             "type": "string"
           }
         },
+        "updated_at": {
+          "type": "string"
+        },
         "version": {
           "$ref": "#/$defs/AppVersion"
         }
       },
       "required": [
+        "id",
+        "created_at",
+        "updated_at",
         "name",
         "category"
       ]

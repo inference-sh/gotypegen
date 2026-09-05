@@ -26,6 +26,18 @@
         "category": {
           "$ref": "#/$defs/AppCategory"
         },
+        "created_at": {
+          "type": "string"
+        },
+        "deleted_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
         "metadata": {
           "type": "object",
           "additionalProperties": {}
@@ -39,11 +51,17 @@
             "type": "string"
           }
         },
+        "updated_at": {
+          "type": "string"
+        },
         "version": {
           "$ref": "#/$defs/AppVersion"
         }
       },
       "required": [
+        "id",
+        "created_at",
+        "updated_at",
         "name",
         "category"
       ]
@@ -135,10 +153,25 @@
             "null"
           ]
         },
+        "created_at": {
+          "type": "string"
+        },
+        "deleted_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
         "status": {
           "type": "string"
         },
         "title": {
+          "type": "string"
+        },
+        "updated_at": {
           "type": "string"
         },
         "visibility": {
@@ -146,9 +179,36 @@
         }
       },
       "required": [
+        "id",
+        "created_at",
+        "updated_at",
         "title",
         "visibility",
         "status"
+      ]
+    },
+    "ExtendedCall": {
+      "type": "object",
+      "description": "ExtendedCall inherits GenerationSettings (tstype extends): TS/pydantic get\na parent type, JSON Schema gets the parent's properties inlined.",
+      "properties": {
+        "max_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "prompt"
       ]
     },
     "GenerationSettings": {

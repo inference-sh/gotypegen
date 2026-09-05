@@ -19,9 +19,19 @@ import (
 // Only structs declared in this package (or its inline packages) can be
 // inlined; an unresolvable embedded type is left as is.
 func (g *PackageGenerator) expandInlineFields(fields []*ast.Field) []*ast.Field {
+	return g.expandEmbeds(fields, false)
+}
+
+// expandAllEmbeds also inlines tstype:",extends" parents. JSON Schema has no
+// inheritance, so for that output a parent's fields must appear on the child.
+func (g *PackageGenerator) expandAllEmbeds(fields []*ast.Field) []*ast.Field {
+	return g.expandEmbeds(fields, true)
+}
+
+func (g *PackageGenerator) expandEmbeds(fields []*ast.Field, includeExtends bool) []*ast.Field {
 	var out []*ast.Field
 	for _, f := range fields {
-		if len(f.Names) != 0 || !g.isInlineEmbed(f) {
+		if len(f.Names) != 0 || !(g.isInlineEmbed(f) || (includeExtends && g.isExtendsEmbed(f))) {
 			out = append(out, f)
 			continue
 		}
@@ -35,9 +45,22 @@ func (g *PackageGenerator) expandInlineFields(fields []*ast.Field) []*ast.Field 
 			out = append(out, f)
 			continue
 		}
-		out = append(out, g.expandInlineFields(st.Fields.List)...)
+		out = append(out, g.expandEmbeds(st.Fields.List, includeExtends)...)
 	}
 	return out
+}
+
+// isExtendsEmbed reports whether an anonymous field carries tstype:",extends".
+func (g *PackageGenerator) isExtendsEmbed(f *ast.Field) bool {
+	if f.Tag == nil {
+		return false
+	}
+	tags, err := structtag.Parse(f.Tag.Value[1 : len(f.Tag.Value)-1])
+	if err != nil {
+		return false
+	}
+	tsTag, err := tags.Get("tstype")
+	return err == nil && tsTag.HasOption("extends")
 }
 
 // isInlineEmbed reports whether an anonymous field has encoding/json inline

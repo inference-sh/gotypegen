@@ -125,6 +125,13 @@ export interface CallInput {
   base: Base;
   prompt: string;
 }
+/**
+ * ExtendedCall inherits GenerationSettings (tstype extends): TS/pydantic get
+ * a parent type, JSON Schema gets the parent's properties inlined.
+ */
+export interface ExtendedCall extends GenerationSettings {
+  prompt: string;
+}
 
 //////////
 // source: uses_shared.go

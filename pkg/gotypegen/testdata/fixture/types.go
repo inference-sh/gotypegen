@@ -213,3 +213,10 @@ type CallInput struct {
 	Base   `json:"base"`
 	Prompt string `json:"prompt" merge:"concat"`
 }
+
+// ExtendedCall inherits GenerationSettings (tstype extends): TS/pydantic get
+// a parent type, JSON Schema gets the parent's properties inlined.
+type ExtendedCall struct {
+	GenerationSettings `tstype:",extends"`
+	Prompt             string `json:"prompt"`
+}
