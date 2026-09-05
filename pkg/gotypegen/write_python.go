@@ -655,11 +655,25 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 		return nil
 	}
 	var fields []pyFieldInfo
-	for _, field := range st.Fields.List {
-		if len(field.Names) == 0 {
-			continue
+	for _, field := range g.expandInlineFields(st.Fields.List) {
+		names := field.Names
+		if len(names) == 0 {
+			// Anonymous field that survived expansion: either a json-named
+			// embed (emitted as a nested field, as encoding/json does) or an
+			// extends/"-" directive handled elsewhere.
+			if g.isInlineEmbed(field) {
+				continue
+			}
+			name, ok := getAnonymousFieldName(field.Type)
+			if !ok {
+				continue
+			}
+			if jsonName, _ := g.getPyFieldInfo(field); jsonName == "" || jsonName == "-" {
+				continue
+			}
+			names = []*ast.Ident{ast.NewIdent(name)}
 		}
-		for _, fieldName := range field.Names {
+		for _, fieldName := range names {
 			if !fieldName.IsExported() {
 				continue
 			}

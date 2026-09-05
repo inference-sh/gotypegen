@@ -190,12 +190,25 @@ func (g *PackageGenerator) structToJSONSchema(st *ast.StructType, description st
 		return schema
 	}
 
-	for _, field := range st.Fields.List {
-		if len(field.Names) == 0 {
-			continue // Skip embedded fields
+	for _, field := range g.expandInlineFields(st.Fields.List) {
+		names := field.Names
+		if len(names) == 0 {
+			// json-named embed -> nested property (encoding/json semantics);
+			// extends/"-" directives are not properties.
+			if g.isInlineEmbed(field) {
+				continue
+			}
+			typeName, ok := getAnonymousFieldName(field.Type)
+			if !ok {
+				continue
+			}
+			if jsonName, _ := g.getJSONFieldInfo(field); jsonName == "" || jsonName == "-" {
+				continue
+			}
+			names = []*ast.Ident{ast.NewIdent(typeName)}
 		}
 
-		for _, name := range field.Names {
+		for _, name := range names {
 			if !name.IsExported() {
 				continue
 			}

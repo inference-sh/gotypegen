@@ -100,7 +100,28 @@ packages:
 - `inline_packages` — import paths whose types are flattened into the output (e.g. `shared.TaskStatus` becomes `TaskStatus`)
 - Methods on traced types are included if they only reference stdlib and other traced types
 
-### Field Tags
+### Embedded structs
+
+Anonymous struct fields follow `encoding/json`:
+
+- **No json name → inlined.** The embedded struct's fields are promoted onto the outer type in TypeScript, pydantic, and JSON Schema output, exactly as they appear on the wire. Field tags on promoted fields are surfaced too.
+- **json name → nested field.** `Base \`json:"base"\`` is a field named `base` of type `Base`.
+- **`tstype:",extends"` → inheritance.** The embedded type becomes a parent class/interface instead of being flattened.
+
+```go
+type GenerationSettings struct {
+    Temperature *float64 `json:"temperature,omitempty"`
+    MaxTokens   *int     `json:"max_tokens,omitempty"`
+}
+
+type CallInput struct {
+    GenerationSettings                 // inlined: temperature, max_tokens
+    Base   `json:"base"`               // nested: base: Base
+    Prompt string `json:"prompt"`
+}
+```
+
+## Field Tags
 
 Surface Go struct tags as queryable metadata on generated types. Consumers can read field-level semantics (merge strategies, privacy annotations, validation hints, etc.) without hardcoding field names.
 

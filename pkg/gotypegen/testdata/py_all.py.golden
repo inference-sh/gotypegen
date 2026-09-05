@@ -51,6 +51,20 @@ ProtocolMeta = TypedDict('ProtocolMeta', {
 class StreamDelta(TypedDict, total=False):
     pass
 
+# GenerationSettings is shared by embedding; encoding/json promotes its
+# fields onto the embedding struct.
+class GenerationSettings(TypedDict, total=False):
+    temperature: Optional[float]
+    max_tokens: Optional[int]
+
+# CallInput embeds GenerationSettings inline (flat JSON) and Base as a
+# named field (nested JSON).
+class CallInput(TypedDict, total=False):
+    temperature: Optional[float]
+    max_tokens: Optional[int]
+    base: Base
+    prompt: str
+
 
 ##########
 # source: uses_shared.go

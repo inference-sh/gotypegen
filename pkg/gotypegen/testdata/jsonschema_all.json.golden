@@ -97,6 +97,34 @@
         "updated_at"
       ]
     },
+    "CallInput": {
+      "type": "object",
+      "description": "CallInput embeds GenerationSettings inline (flat JSON) and Base as a\nnamed field (nested JSON).",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/Base"
+        },
+        "max_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "temperature": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "base",
+        "prompt"
+      ]
+    },
     "Document": {
       "type": "object",
       "description": "Document uses types from the shared package.",
@@ -122,6 +150,24 @@
         "visibility",
         "status"
       ]
+    },
+    "GenerationSettings": {
+      "type": "object",
+      "description": "GenerationSettings is shared by embedding; encoding/json promotes its\nfields onto the embedding struct.",
+      "properties": {
+        "max_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "temperature": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
     },
     "LLMDelta": {
       "type": "object",

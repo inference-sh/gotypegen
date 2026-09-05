@@ -184,6 +184,21 @@ type LLMDelta struct {
 	Usage *Base `json:"usage,omitempty"       merge:"replace"`
 }
 
+// GenerationSettings is shared by embedding; encoding/json promotes its
+// fields onto the embedding struct.
+type GenerationSettings struct {
+	Temperature *float64 `json:"temperature,omitempty" merge:"replace"`
+	MaxTokens *int `json:"max_tokens,omitempty"`
+}
+
+// CallInput embeds GenerationSettings inline (flat JSON) and Base as a
+// named field (nested JSON).
+type CallInput struct {
+	GenerationSettings
+	Base `json:"base"`
+	Prompt string `json:"prompt" merge:"concat"`
+}
+
 // --------------------
 // source: uses_shared.go
 // --------------------

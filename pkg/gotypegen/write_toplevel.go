@@ -279,7 +279,7 @@ func (g *PackageGenerator) writeTsFieldTags(s *strings.Builder, typeName string,
 	}
 
 	var entries []fieldTagEntry
-	for _, f := range fields {
+	for _, f := range g.expandInlineFields(fields) {
 		if f.Tag == nil || len(f.Names) == 0 {
 			continue
 		}

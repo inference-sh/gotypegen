@@ -285,7 +285,7 @@ func (g *PackageGenerator) writeInterfaceFields(
 }
 
 func (g *PackageGenerator) writeStructFields(s *strings.Builder, fields []*ast.Field, depth int) {
-	for _, f := range fields {
+	for _, f := range g.expandInlineFields(fields) {
 		optional := false
 		required := false
 		readonly := false

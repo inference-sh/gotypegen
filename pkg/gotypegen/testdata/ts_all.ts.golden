@@ -107,6 +107,24 @@ export interface LLMDelta extends StreamDelta {
   tool_calls?: Base[];
   usage?: Base;
 }
+/**
+ * GenerationSettings is shared by embedding; encoding/json promotes its
+ * fields onto the embedding struct.
+ */
+export interface GenerationSettings {
+  temperature?: number /* float64 */;
+  max_tokens?: number /* int */;
+}
+/**
+ * CallInput embeds GenerationSettings inline (flat JSON) and Base as a
+ * named field (nested JSON).
+ */
+export interface CallInput {
+  temperature?: number /* float64 */;
+  max_tokens?: number /* int */;
+  base: Base;
+  prompt: string;
+}
 
 //////////
 // source: uses_shared.go
