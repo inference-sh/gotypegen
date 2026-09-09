@@ -332,10 +332,38 @@ func (g *PackageGenerator) generateGoFile(
 			}
 
 			if d.Tok == token.VAR {
-				continue // skip var declarations in Go output
+				if g.isEmitVar(d) {
+					writeHeader()
+					g.writeGoEmitVar(s, d, includedTypes)
+				}
+				continue
 			}
 		}
 	}
+}
+
+// writeGoEmitVar preserves a //gotypegen:emit var in the Go output so
+// downstream generators (Go→TS) can pick it up. In trace mode the var is
+// only carried when its type is in the included set.
+func (g *PackageGenerator) writeGoEmitVar(s *strings.Builder, d *ast.GenDecl, includedTypes map[string]bool) {
+	vs := d.Specs[0].(*ast.ValueSpec)
+	if includedTypes != nil && vs.Type != nil {
+		if ident, ok := vs.Type.(*ast.Ident); ok {
+			if !includedTypes[ident.Name] {
+				return
+			}
+		}
+	}
+	// Reproduce the emit var as-is so downstream generators see it.
+	s.WriteString("\n//gotypegen:emit\n")
+	val := vs.Values[0].(*ast.BasicLit).Value
+	if vs.Type != nil {
+		if ident, ok := vs.Type.(*ast.Ident); ok {
+			s.WriteString(fmt.Sprintf("var _ %s = %s\n", ident.Name, val))
+			return
+		}
+	}
+	s.WriteString(fmt.Sprintf("var _ = %s\n", val))
 }
 
 // shouldEmitConstGroup checks if a const group should be emitted.
