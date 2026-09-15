@@ -103,6 +103,11 @@ type PackageConfig struct {
 	// Only used by the Go output format.
 	InlinePackages []string `yaml:"inline_packages"`
 
+	// SwiftPrelude controls whether the Swift output starts with the JSONValue
+	// support type. Supported values: "" / "emit" (default), "none" — use "none"
+	// for a second Swift package in the same module that already has it.
+	SwiftPrelude string `yaml:"swift_prelude"`
+
 	// FieldTags lists struct tag keys to surface in generated output.
 	// For each struct with tagged fields, a _field_tags dict (Python) or companion
 	// const (TypeScript) is emitted mapping field names to their tag values.
@@ -199,6 +204,11 @@ func (c PackageConfig) IsFileIgnored(pathToFile string) bool {
 // IsPydantic returns true if the Python output should use pydantic BaseModel
 func (c PackageConfig) IsPydantic() bool {
 	return c.PythonStyle == "pydantic"
+}
+
+// EmitSwiftPrelude returns true if the Swift output should define JSONValue.
+func (c PackageConfig) EmitSwiftPrelude() bool {
+	return c.SwiftPrelude != "none"
 }
 
 // IsTraceMode returns true if the config is set to trace dependencies

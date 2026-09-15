@@ -188,6 +188,7 @@ Only emitted for structs that have at least one field with a configured tag. No 
 | `exclude_files` | []string | | Go source files to skip |
 | `include_files` | []string | | If set, only these files are processed |
 | `python_style` | string | `"typeddict"` | `"typeddict"` or `"pydantic"` |
+| `swift_prelude` | string | `"emit"` | `"none"` skips the `JSONValue` support type (second Swift package in one module) |
 | `go_package` | string | `"types"` | Package name for Go output |
 | `go_module` | string | | Module path for generated go.mod |
 | `keep_tags` | []string | all | Struct tag allowlist for Go output |

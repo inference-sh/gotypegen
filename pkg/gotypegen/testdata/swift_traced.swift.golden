@@ -2,7 +2,7 @@
 
 import Foundation
 
-/// Untyped JSON — what Go's `any`, `interface{}` and `json.RawMessage` become.
+/// Untyped JSON: what Go's any, interface{} and json.RawMessage become.
 public enum JSONValue: Codable, Hashable, Sendable {
     case string(String)
     case number(Double)
@@ -96,7 +96,6 @@ public struct SDKTypes: Codable {
 public struct AppCategory: RawRepresentable, Codable, Hashable, Sendable {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
-    public init(_ value: String) { self.rawValue = value }
 
     public static let image = AppCategory(rawValue: "image")
     public static let video = AppCategory(rawValue: "video")
