@@ -875,6 +875,35 @@ func TestGoOutputDeterministic(t *testing.T) {
 }
 
 // ============================================================
+// Multi-format runs share one PackageGenerator (and one AST)
+// ============================================================
+
+// The TypeScript writer used to rewrite f.Type in place when unwrapping
+// pointers, so a `--format=typescript,python,swift` run emitted optional
+// fields as required in every format after the first.
+func TestFormatsDoNotMutateSharedAST(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	if _, err := gen.Generate(); err != nil {
+		t.Fatal(err)
+	}
+	py, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.Assert(t, py, "py_all.py.golden")
+
+	gen = loadFixture(t, &PackageConfig{FieldTags: []string{"merge"}})
+	if _, err := gen.Generate(); err != nil {
+		t.Fatal(err)
+	}
+	sw, err := gen.GenerateSwift()
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden.Assert(t, sw, "swift_all.swift.golden")
+}
+
+// ============================================================
 // Behavioral tests — Python backend specifics
 // ============================================================
 

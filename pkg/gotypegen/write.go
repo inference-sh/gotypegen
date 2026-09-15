@@ -360,10 +360,12 @@ func (g *PackageGenerator) writeStructFields(s *strings.Builder, fields []*ast.F
 			s.WriteByte('\'')
 		}
 
-		switch t := f.Type.(type) {
-		case *ast.StarExpr:
+		// Unwrap pointers locally: the AST is shared with the other writers
+		// when several formats run in one process, so never rewrite f.Type.
+		fieldType := f.Type
+		if t, ok := fieldType.(*ast.StarExpr); ok {
 			optional = !required
-			f.Type = t.X
+			fieldType = t.X
 		}
 
 		if optional && g.conf.OptionalType == "undefined" {
@@ -373,7 +375,7 @@ func (g *PackageGenerator) writeStructFields(s *strings.Builder, fields []*ast.F
 		s.WriteString(": ")
 
 		if tstype == "" {
-			g.writeType(s, f.Type, nil, depth, false)
+			g.writeType(s, fieldType, nil, depth, false)
 			if optional && g.conf.OptionalType == "null" {
 				s.WriteString(" | null")
 			}
