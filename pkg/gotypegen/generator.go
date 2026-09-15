@@ -42,7 +42,7 @@ func (g *Generator) Generate() error {
 	return g.GenerateWithFormats([]string{"typescript"})
 }
 
-// GenerateWithFormats generates output for specified formats: typescript, jsonschema, python
+// GenerateWithFormats generates output for specified formats: typescript, jsonschema, python, go, swift
 func (g *Generator) GenerateWithFormats(formats []string) error {
 	// Collect all packages to load: configured packages + inline packages
 	loadPaths := g.conf.PackageNames()
@@ -122,6 +122,9 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 			case "python", "py":
 				code, err = pkgGen.GeneratePython()
 				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".py")
+			case "swift":
+				code, err = pkgGen.GenerateSwift()
+				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".swift")
 			case "go", "golang":
 				code, err = pkgGen.GenerateGo()
 				outPath = pkgGen.conf.resolvedOutputPathForExt(pkgDir, ".go")

@@ -1,6 +1,6 @@
-// gotypegen generates TypeScript, JSON Schema, Python, and Go types from Go source code.
+// gotypegen generates TypeScript, JSON Schema, Python, Go, and Swift types from Go source code.
 //
-// Usage: gotypegen [--format=typescript,jsonschema,python,go] [config.yaml]
+// Usage: gotypegen [--format=typescript,jsonschema,python,go,swift] [config.yaml]
 package main
 
 import (
@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	formatFlag := flag.String("format", "typescript", "Output formats (comma-separated): typescript, jsonschema, python, go")
+	formatFlag := flag.String("format", "typescript", "Output formats (comma-separated): typescript, jsonschema, python, go, swift")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 

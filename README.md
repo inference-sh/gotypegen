@@ -1,6 +1,6 @@
 # gotypegen
 
-Generate TypeScript, Python, JSON Schema, and Go types from Go source code.
+Generate TypeScript, Python, JSON Schema, Go, and Swift types from Go source code.
 
 Originally based on [tygo](https://github.com/gzuidhof/tygo) by Guido Zuidhof (MIT). Extended with Python TypedDict/pydantic output, JSON Schema output, Go source output with method tracing, and dependency tracing.
 
@@ -13,7 +13,7 @@ go install github.com/inference-sh/gotypegen/cmd/gotypegen@latest
 ## Usage
 
 ```bash
-gotypegen [--format=typescript,jsonschema,python,go] [config.yaml]
+gotypegen [--format=typescript,jsonschema,python,go,swift] [config.yaml]
 ```
 
 Multiple formats can be comma-separated; each writes its own output file derived from `output_path`.
@@ -33,6 +33,7 @@ packages:
 
 - `typescript` (default) — TypeScript interfaces and const exports
 - `python` — Python TypedDict or pydantic BaseModel classes, StrEnum/IntEnum
+- `swift` — Swift Codable structs (public init, CodingKeys with wire names), RawRepresentable open enums for string/int types, `JSONValue` for `any`, `final class` for structs on reference cycles
 - `jsonschema` — JSON Schema 2020-12 definitions
 - `go` — Go source with methods, tag stripping, and `go.mod` generation
 

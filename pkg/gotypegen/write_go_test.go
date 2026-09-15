@@ -140,6 +140,29 @@ func TestGolden(t *testing.T) {
 		golden.Assert(t, code, "py_traced.py.golden")
 	})
 
+	// --- Swift output ---
+
+	t.Run("swift/all", func(t *testing.T) {
+		gen := loadFixture(t, &PackageConfig{FieldTags: []string{"merge"}})
+		code, err := gen.GenerateSwift()
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Assert(t, code, "swift_all.swift.golden")
+	})
+
+	t.Run("swift/traced", func(t *testing.T) {
+		gen := loadFixture(t, &PackageConfig{
+			Mode:       "trace",
+			EntryFiles: []string{"api.go"},
+		})
+		code, err := gen.GenerateSwift()
+		if err != nil {
+			t.Fatal(err)
+		}
+		golden.Assert(t, code, "swift_traced.swift.golden")
+	})
+
 	// --- JSON Schema output ---
 
 	t.Run("jsonschema/all", func(t *testing.T) {
