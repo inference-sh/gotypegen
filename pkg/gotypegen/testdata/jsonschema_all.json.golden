@@ -115,6 +115,15 @@
         "updated_at"
       ]
     },
+    "Bound": {
+      "type": "object",
+      "description": "Bound marshals as either a bare literal or {\"path\": ...} — its wire shape\nis whatever MarshalJSON writes, not its struct fields.",
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      }
+    },
     "CallInput": {
       "type": "object",
       "description": "CallInput embeds GenerationSettings inline (flat JSON) and Base as a\nnamed field (nested JSON).",
@@ -293,6 +302,11 @@
       "type": "object",
       "description": "SDKTypes is a phantom type that pulls types into the trace."
     },
+    "Settings": {
+      "type": "object",
+      "description": "Settings is a named map: nil encodes as JSON null exactly like the bare\nmap it wraps, so non-Go consumers must treat fields of this type as nullable.",
+      "additionalProperties": {}
+    },
     "StreamDelta": {
       "type": "object",
       "description": "StreamDelta is a marker base for streaming delta types."
@@ -311,6 +325,24 @@
       },
       "required": [
         "data"
+      ]
+    },
+    "WireShapes": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/Bound"
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        },
+        "value": {
+          "$ref": "#/$defs/Bound"
+        }
+      },
+      "required": [
+        "settings",
+        "value"
       ]
     }
   }

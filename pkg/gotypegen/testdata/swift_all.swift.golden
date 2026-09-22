@@ -428,3 +428,47 @@ public struct Document: Codable {
 /// self-referential aliases are skipped when inlined.
 public typealias Visibility = JSONValue
 
+// MARK: - wire_shapes.go
+
+/// Settings is a named map: nil encodes as JSON null exactly like the bare
+/// map it wraps, so non-Go consumers must treat fields of this type as nullable.
+public typealias Settings = [String: JSONValue]
+
+/// Bound marshals as either a bare literal or {"path": ...} — its wire shape
+/// is whatever MarshalJSON writes, not its struct fields.
+public struct Bound: Codable {
+    public var path: String?
+
+    public init(
+        path: String? = nil
+    ) {
+        self.path = path
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case path = "path"
+    }
+}
+
+public struct WireShapes: Codable {
+    public var settings: Settings?
+    public var label: JSONValue?
+    public var value: JSONValue
+
+    public init(
+        settings: Settings? = nil,
+        label: JSONValue? = nil,
+        value: JSONValue = .null
+    ) {
+        self.settings = settings
+        self.label = label
+        self.value = value
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case settings = "settings"
+        case label = "label"
+        case value = "value"
+    }
+}
+

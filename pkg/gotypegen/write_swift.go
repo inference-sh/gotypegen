@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -637,7 +638,7 @@ func (w *swiftWriter) collectFields(structName string, st *ast.StructType) []swi
 func (w *swiftWriter) typeOf(expr ast.Expr) (string, bool) {
 	switch t := expr.(type) {
 	case *ast.Ident:
-		return w.identType(t.Name), false
+		return w.identType(t.Name), w.namedNullable(t.Name)
 	case *ast.SelectorExpr:
 		full := fmt.Sprintf("%s.%s", t.X, t.Sel.Name)
 		if m, ok := w.g.conf.TypeMappings[full]; ok {
@@ -700,6 +701,9 @@ func (w *swiftWriter) identType(name string) string {
 		typ, _ := tsMappingToSwift(m)
 		return typ
 	}
+	if w.customJSON(name) {
+		return "JSONValue"
+	}
 	switch name {
 	case "string":
 		return "String"
@@ -720,6 +724,45 @@ func (w *swiftWriter) identType(name string) string {
 		return "JSONValue"
 	}
 	return name
+}
+
+// namedNullable reports whether a named package type encodes as JSON null
+// when zero: a named map or slice (`type StringEncodedMap map[string]any`) is
+// nil-able exactly like the bare map it wraps, so it must be Optional too.
+// Without this, `Memory StringEncodedMap` decoded as non-optional and every
+// payload carrying `"memory": null` failed the whole decode.
+func (w *swiftWriter) namedNullable(name string) bool {
+	tn := w.lookupTypeName(name)
+	if tn == nil {
+		return false
+	}
+	switch tn.Type().Underlying().(type) {
+	case *types.Map, *types.Slice:
+		return true
+	}
+	return false
+}
+
+// customJSON reports whether a named package type has its own MarshalJSON.
+// Its wire shape is whatever that method writes, not its struct fields —
+// e.g. A2UIBoundValue marshals as a bare literal OR {"path": ...}. Emitting
+// the struct shape makes Swift reject the literal form, so such types
+// decode as JSONValue instead.
+func (w *swiftWriter) customJSON(name string) bool {
+	tn := w.lookupTypeName(name)
+	if tn == nil {
+		return false
+	}
+	ms := types.NewMethodSet(types.NewPointer(tn.Type()))
+	return ms.Lookup(tn.Pkg(), "MarshalJSON") != nil
+}
+
+func (w *swiftWriter) lookupTypeName(name string) *types.TypeName {
+	if w.g.pkg == nil || w.g.pkg.Types == nil {
+		return nil
+	}
+	tn, _ := w.g.pkg.Types.Scope().Lookup(name).(*types.TypeName)
+	return tn
 }
 
 func tsMappingToSwift(mapping string) (string, bool) {

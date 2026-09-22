@@ -71,6 +71,24 @@ class CallInput(TypedDict, total=False):
 
 
 ##########
+# source: wire_shapes.go
+
+# Settings is a named map: nil encodes as JSON null exactly like the bare
+# map it wraps, so non-Go consumers must treat fields of this type as nullable.
+Settings = Dict[str, Any]
+
+# Bound marshals as either a bare literal or {"path": ...} — its wire shape
+# is whatever MarshalJSON writes, not its struct fields.
+class Bound(TypedDict, total=False):
+    path: str
+
+class WireShapes(TypedDict, total=False):
+    settings: Settings
+    label: Optional[Bound]
+    value: Bound
+
+
+##########
 # source: types.go
 
 # App represents an application.

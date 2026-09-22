@@ -150,3 +150,24 @@ export interface Document extends Base {
  * self-referential aliases are skipped when inlined.
  */
 export type Visibility = any /* shared.Visibility */;
+
+//////////
+// source: wire_shapes.go
+
+/**
+ * Settings is a named map: nil encodes as JSON null exactly like the bare
+ * map it wraps, so non-Go consumers must treat fields of this type as nullable.
+ */
+export type Settings = { [key: string]: any};
+/**
+ * Bound marshals as either a bare literal or {"path": ...} — its wire shape
+ * is whatever MarshalJSON writes, not its struct fields.
+ */
+export interface Bound {
+  path?: string;
+}
+export interface WireShapes {
+  settings: Settings;
+  label?: Bound;
+  value: Bound;
+}

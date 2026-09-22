@@ -1278,3 +1278,18 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "\n... (truncated)"
 }
+
+// Named maps encode nil as null, and types with their own MarshalJSON have a
+// wire shape their struct fields don't describe. Swift used to emit both
+// structurally: `"settings": null` and a literal Bound each failed the whole
+// decode of the enclosing object.
+func TestSwiftWireShapes(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	sw, err := gen.GenerateSwift()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, sw, "public var settings: Settings?")
+	mustContain(t, sw, "public var label: JSONValue?")
+	mustContain(t, sw, "public var value: JSONValue")
+}
