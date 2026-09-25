@@ -1,10 +1,14 @@
 package gotypegen
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // TypeInfo holds information about a type definition
@@ -589,6 +593,42 @@ func (g *PackageGenerator) TraceConstants(graph *TypeGraph, includedTypes map[st
 	}
 
 	return includedConsts
+}
+
+// untypedConstGroups reports const groups, in the package and its inline
+// packages, with two or more exported untyped string consts. Tracing follows
+// types, so such enum-like groups never reach the output.
+func (g *PackageGenerator) untypedConstGroups() []string {
+	var out []string
+	for _, pkg := range append([]*packages.Package{g.pkg}, g.inlinePkgs...) {
+		for _, file := range pkg.Syntax {
+			if g.conf.IsFileIgnored(pkg.Fset.Position(file.Pos()).Filename) {
+				continue
+			}
+			for _, decl := range file.Decls {
+				genDecl, ok := decl.(*ast.GenDecl)
+				if !ok || genDecl.Tok != token.CONST {
+					continue
+				}
+				var names []string
+				for _, spec := range genDecl.Specs {
+					for _, name := range spec.(*ast.ValueSpec).Names {
+						c, ok := pkg.TypesInfo.Defs[name].(*types.Const)
+						if ok && name.IsExported() && c.Type() == types.Typ[types.UntypedString] {
+							names = append(names, name.Name)
+						}
+					}
+				}
+				if len(names) < 2 {
+					continue
+				}
+				pos := pkg.Fset.Position(genDecl.Pos())
+				out = append(out, fmt.Sprintf("%s/%s:%d: untyped string consts %s are not emitted; declare them with a named type",
+					pkg.Types.Path(), filepath.Base(pos.Filename), pos.Line, strings.Join(names, ", ")))
+			}
+		}
+	}
+	return out
 }
 
 // GenerateTraced generates output with only traced types

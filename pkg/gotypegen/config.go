@@ -113,6 +113,13 @@ type PackageConfig struct {
 	// const (TypeScript) is emitted mapping field names to their tag values.
 	// Example: field_tags: ["merge"] surfaces `merge:"concat"` tags.
 	FieldTags []string `yaml:"field_tags"`
+
+	// StringEnums controls how a `type X string` with consts is emitted in
+	// TypeScript. Supported values: "" / "closed" (default), "open".
+	// "closed" emits the literal union `"a" | "b"`; "open" appends
+	// `| (string & {})` so unknown values still type-check but editors
+	// still suggest the known ones.
+	StringEnums string `yaml:"string_enums"`
 }
 
 type Config struct {
@@ -177,6 +184,17 @@ func normalizeOptionalType(optional string) (string, error) {
 		return "null", nil
 	default:
 		return "", fmt.Errorf("unsupported optional: %s", optional)
+	}
+}
+
+func normalizeStringEnums(mode string) (string, error) {
+	switch mode {
+	case "", "closed":
+		return "closed", nil
+	case "open":
+		return "open", nil
+	default:
+		return "", fmt.Errorf("unsupported string_enums: %s", mode)
 	}
 }
 
@@ -321,6 +339,11 @@ func (pc PackageConfig) Normalize() (PackageConfig, error) {
 	pc.OptionalType, err = normalizeOptionalType(pc.OptionalType)
 	if err != nil {
 		return pc, fmt.Errorf("invalid optional_type config for package %s: %s", pc.Path, err)
+	}
+
+	pc.StringEnums, err = normalizeStringEnums(pc.StringEnums)
+	if err != nil {
+		return pc, fmt.Errorf("invalid string_enums config for package %s: %s", pc.Path, err)
 	}
 
 	return pc, nil

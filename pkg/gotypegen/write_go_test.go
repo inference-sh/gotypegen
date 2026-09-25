@@ -14,8 +14,14 @@ import (
 // loadFixture loads the testdata/fixture package and returns a PackageGenerator.
 func loadFixture(t *testing.T, conf *PackageConfig) *PackageGenerator {
 	t.Helper()
+	return loadFixtureDir(t, "testdata/fixture", conf)
+}
 
-	fixtureDir, err := filepath.Abs("testdata/fixture")
+// loadFixtureDir loads the package in dir and returns a PackageGenerator.
+func loadFixtureDir(t *testing.T, dir string, conf *PackageConfig) *PackageGenerator {
+	t.Helper()
+
+	fixtureDir, err := filepath.Abs(dir)
 	if err != nil {
 		t.Fatalf("abs path: %v", err)
 	}

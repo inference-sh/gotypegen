@@ -23,6 +23,9 @@ type PackageGenerator struct {
 
 	// inlinePkgs holds packages whose types are flattened into the output.
 	inlinePkgs []*packages.Package
+
+	// stringEnums caches stringEnumValues.
+	stringEnums map[string][]string
 }
 
 func New(config *Config) *Generator {
@@ -107,6 +110,12 @@ func (g *Generator) GenerateWithFormats(formats []string) error {
 			inlinePkgs: inlinePkgs,
 		}
 		g.packageGenerators[pkg.PkgPath] = pkgGen
+
+		if pkgConfig.IsTraceMode() {
+			for _, w := range pkgGen.untypedConstGroups() {
+				fmt.Fprintln(os.Stderr, "warning:", w)
+			}
+		}
 
 		for _, format := range formats {
 			var code string

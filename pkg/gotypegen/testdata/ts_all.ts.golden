@@ -23,7 +23,7 @@ export interface SDKTypes {
 /**
  * AppCategory represents the category of an app.
  */
-export type AppCategory = string;
+export type AppCategory = "image" | "video" | "audio" | "text";
 export const AppCategoryImage: AppCategory = "image";
 export const AppCategoryVideo: AppCategory = "video";
 export const AppCategoryAudio: AppCategory = "audio";
@@ -94,7 +94,7 @@ export interface StreamDelta {
 /**
  * MergeStrategy defines how a delta field should be merged.
  */
-export type MergeStrategy = string;
+export type MergeStrategy = "concat" | "replace" | "indexed";
 export const MergeStrategyConcat: MergeStrategy = "concat";
 export const MergeStrategyReplace: MergeStrategy = "replace";
 export const MergeStrategyIndexed: MergeStrategy = "indexed";

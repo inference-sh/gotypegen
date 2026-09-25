@@ -3,7 +3,11 @@ package gotypegen
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
+	"go/types"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/structtag"
@@ -133,8 +137,13 @@ func (g *PackageGenerator) writeTypeSpec(
 	if isIdent {
 		s.WriteString("export type ")
 		s.WriteString(ts.Name.Name)
-		s.WriteString(" = ")
-		s.WriteString(getIdent(id.Name))
+		if values := g.stringEnumValues()[ts.Name.Name]; id.Name == "string" && !ts.Assign.IsValid() && len(values) > 0 {
+			s.WriteString(" =")
+			g.writeStringUnion(s, values)
+		} else {
+			s.WriteString(" = ")
+			s.WriteString(getIdent(id.Name))
+		}
 		s.WriteString(";")
 	}
 
@@ -157,6 +166,71 @@ func (g *PackageGenerator) writeTypeSpec(
 	} else {
 		s.WriteString("\n")
 	}
+}
+
+// writeStringUnion writes a string enum's values as a literal union, one per
+// line when the union is long.
+func (g *PackageGenerator) writeStringUnion(s *strings.Builder, values []string) {
+	members := make([]string, 0, len(values)+1)
+	for _, v := range values {
+		members = append(members, strconv.Quote(v))
+	}
+	if g.conf.StringEnums == "open" {
+		members = append(members, "(string & {})")
+	}
+	if len(members) <= 4 {
+		s.WriteString(" ")
+		s.WriteString(strings.Join(members, " | "))
+		return
+	}
+	for _, m := range members {
+		s.WriteString("\n")
+		s.WriteString(g.conf.Indent)
+		s.WriteString("| ")
+		s.WriteString(m)
+	}
+}
+
+// stringEnumValues maps each named string type of the package to the values
+// of its consts, in declaration order. Consts in ignored files are skipped.
+func (g *PackageGenerator) stringEnumValues() map[string][]string {
+	if g.stringEnums != nil {
+		return g.stringEnums
+	}
+	g.stringEnums = make(map[string][]string)
+	if g.pkg.Types == nil {
+		return g.stringEnums
+	}
+
+	scope := g.pkg.Types.Scope()
+	var consts []*types.Const
+	for _, name := range scope.Names() {
+		c, ok := scope.Lookup(name).(*types.Const)
+		if !ok || c.Val().Kind() != constant.String {
+			continue
+		}
+		named, ok := c.Type().(*types.Named)
+		if !ok || named.Obj().Pkg() != g.pkg.Types {
+			continue
+		}
+		if g.conf.IsFileIgnored(g.pkg.Fset.Position(c.Pos()).Filename) {
+			continue
+		}
+		consts = append(consts, c)
+	}
+	sort.Slice(consts, func(i, j int) bool { return consts[i].Pos() < consts[j].Pos() })
+
+	seen := make(map[string]bool)
+	for _, c := range consts {
+		typeName := c.Type().(*types.Named).Obj().Name()
+		v := constant.StringVal(c.Val())
+		if seen[typeName+"\x00"+v] {
+			continue
+		}
+		seen[typeName+"\x00"+v] = true
+		g.stringEnums[typeName] = append(g.stringEnums[typeName], v)
+	}
+	return g.stringEnums
 }
 
 // Writing of type inheritance specs, which are expressions like

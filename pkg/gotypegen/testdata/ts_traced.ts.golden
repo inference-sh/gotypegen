@@ -23,7 +23,7 @@ export interface SDKTypes {
 /**
  * AppCategory represents the category of an app.
  */
-export type AppCategory = string;
+export type AppCategory = "image" | "video" | "audio" | "text";
 export const AppCategoryImage: AppCategory = "image";
 export const AppCategoryVideo: AppCategory = "video";
 export const AppCategoryAudio: AppCategory = "audio";

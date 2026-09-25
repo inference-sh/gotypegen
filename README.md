@@ -196,6 +196,7 @@ Only emitted for structs that have at least one field with a configured tag. No 
 | `flavor` | string | `"default"` | Key naming: `"default"` or `"yaml"` |
 | `preserve_comments` | string | `"default"` | `"default"`, `"types"`, or `"none"` |
 | `optional_type` | string | `"undefined"` | TS optional: `"undefined"` or `"null"` |
+| `string_enums` | string | `"closed"` | TS for `type X string` with consts: `"closed"` literal union, `"open"` adds `\| (string & {})` |
 | `extends` | string | | Default interface for TS to extend |
 | `field_tags` | []string | | Struct tags to surface as field metadata |
 | `fallback_type` | string | `"any"` | Type for unrecognized Go types |
