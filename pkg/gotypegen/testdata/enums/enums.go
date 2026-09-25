@@ -50,4 +50,7 @@ type Item struct {
 	Label Label  `json:"label"`
 	Name  Name   `json:"name"`
 	Owner string `json:"owner"`
+
+	Counts map[Stage]int    `json:"counts"`
+	Tags   map[Label]string `json:"tags"`
 }

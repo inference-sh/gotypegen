@@ -104,9 +104,16 @@ func (g *PackageGenerator) writeType(
 			s.WriteString(" */")
 		}
 	case *ast.MapType:
-		s.WriteString("{ [key: ")
-		g.writeType(s, t.Key, t, depth, false)
-		s.WriteString("]: ")
+		// A literal union can't be an index signature key; use a mapped type.
+		if key, ok := t.Key.(*ast.Ident); ok && len(g.stringEnumValues()[key.Name]) > 0 {
+			s.WriteString("{ [key in ")
+			s.WriteString(key.Name)
+			s.WriteString("]?: ")
+		} else {
+			s.WriteString("{ [key: ")
+			g.writeType(s, t.Key, t, depth, false)
+			s.WriteString("]: ")
+		}
 		g.writeType(s, t.Value, t, depth, false)
 		s.WriteByte('}')
 	case *ast.BasicLit:

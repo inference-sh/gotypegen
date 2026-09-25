@@ -15,6 +15,8 @@ func TestTsStringEnumsAreLiteralUnions(t *testing.T) {
 	mustContain(t, out, "export type Stage =\n  | \"queued\"\n  | \"running\"\n  | \"done\"\n  | \"failed\"\n  | \"skipped\";")
 	mustContain(t, out, "export type Label = string;")
 	mustContain(t, out, "export type Name = string;")
+	mustContain(t, out, "counts: { [key in Stage]?: number /* int */};")
+	mustContain(t, out, "tags: { [key: Label]: string};")
 }
 
 func TestTsOpenStringEnums(t *testing.T) {
