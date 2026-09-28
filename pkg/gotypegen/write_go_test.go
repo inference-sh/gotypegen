@@ -1349,6 +1349,7 @@ copy.parent = Thread(id: "other")
 check(t.parent?.id == "root", "value semantics: the original is untouched")
 let out = String(decoding: try JSONEncoder().encode(Thread(id: "x")), as: UTF8.self)
 check(!out.contains("parent"), "nil indirect field is omitted: \(out)")
+check(MemoryLayout<Folder>.size <= 32, "struct fields are boxed, not inline: \(MemoryLayout<Folder>.size) bytes")
 func needsSendable<T: Sendable>(_: T) {}
 needsSendable(t)
 print("OK")

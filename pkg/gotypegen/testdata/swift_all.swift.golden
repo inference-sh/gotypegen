@@ -245,7 +245,7 @@ public struct App: Codable, Sendable {
     public var deletedAt: String?
     public var name: String
     public var category: AppCategory
-    public var version: AppVersion?
+    @Indirect public var version: AppVersion?
     public var tags: [String]?
     public var metadata: [String: JSONValue]?
 
@@ -335,7 +335,7 @@ public struct Unreferenced: Codable, Sendable {
 /// ProtocolMeta has JSON tags with dots and slashes that are not valid
 /// identifiers in Python or JavaScript — the generators must handle them.
 public struct ProtocolMeta: Codable, Sendable {
-    public var ioModelcontextprotocolServerInfo: AppVersion?
+    @Indirect public var ioModelcontextprotocolServerInfo: AppVersion?
     public var ttlMs: Int?
 
     public init(
@@ -372,7 +372,7 @@ public struct LLMDelta: Codable, Sendable {
     public var response: String
     public var reasoning: String?
     public var toolCalls: [Base]?
-    public var usage: Base?
+    @Indirect public var usage: Base?
 
     public init(
         response: String = "",
@@ -430,7 +430,7 @@ public struct GenerationSettings: Codable, Sendable {
 public struct CallInput: Codable, Sendable {
     public var temperature: Double?
     public var maxTokens: Int?
-    public var base: Base
+    @Indirect public var base: Base
     public var prompt: String
 
     public init(
@@ -559,8 +559,8 @@ public struct Bound: Codable, Sendable {
 
 public struct WireShapes: Codable, Sendable {
     public var settings: Settings?
-    public var label: JSONValue?
-    public var value: JSONValue
+    @Indirect public var label: JSONValue?
+    @Indirect public var value: JSONValue
 
     public init(
         settings: Settings? = nil,

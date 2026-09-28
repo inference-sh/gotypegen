@@ -24,8 +24,10 @@ var swiftIndirect string
 //
 // Mapping:
 //   - struct               → public struct ... : Codable, Sendable (public init, CodingKeys keep the JSON names)
-//   - field closing a reference cycle (A → *B → *A) → @Indirect, a boxed value (Swift structs cannot
-//     contain themselves); cycles through slices and maps need nothing, arrays already box
+//   - struct-typed field (value or pointer) → @Indirect, a boxed value: keeps every struct small (a
+//     DTO graph stored inline runs to kilobytes per value and overflows small stacks, e.g. the
+//     watch's main thread, as copies pile up) and lets structs reach themselves (A → *B → *A).
+//     Slices and maps already store their elements out of line.
 //   - generic params       → T: Codable & Sendable
 //   - `type X string` / int → RawRepresentable struct with `static let` members for every const of that type
 //     (open enum: unknown wire values still decode)
@@ -122,19 +124,25 @@ func (w *swiftWriter) generate() (string, error) {
 	return s.String(), nil
 }
 
-// needsIndirect reports whether an emitted struct has a cycle-closing field.
+// needsIndirect reports whether an emitted struct has a boxed field.
 func (w *swiftWriter) needsIndirect() bool {
 	for name, st := range w.structs {
 		if w.included != nil && !w.included[name] {
 			continue
 		}
 		for _, f := range w.fields(name, st) {
-			if w.indirect[f] {
+			if w.indirect[f] || w.isStructField(f.Type) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// isStructField reports whether a field holds one of the emitted structs by
+// value or pointer (not in a slice or map, which box their elements already).
+func (w *swiftWriter) isStructField(expr ast.Expr) bool {
+	return len(w.directRefs(expr)) > 0
 }
 
 // rawType returns "String" or "Int" for enum-backed aliases, "" otherwise.
@@ -664,7 +672,7 @@ func (w *swiftWriter) collectFields(structName string, st *ast.StructType) []swi
 				optional: nullable || omitempty,
 				doc:      doc,
 				tags:     w.g.configuredFieldTags(field),
-				indirect: w.indirect[field],
+				indirect: w.indirect[field] || w.isStructField(field.Type),
 			})
 		}
 	}
