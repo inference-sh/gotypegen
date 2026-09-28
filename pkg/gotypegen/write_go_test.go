@@ -1299,3 +1299,73 @@ func TestSwiftWireShapes(t *testing.T) {
 	mustContain(t, sw, "public var label: JSONValue?")
 	mustContain(t, sw, "public var value: JSONValue")
 }
+
+// Reference cycles stay value types: the fields that close a cycle are
+// @Indirect, slices need nothing, and every struct is Sendable.
+func TestSwiftCyclesAreIndirectSendableStructs(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
+	sw, err := gen.GenerateSwift()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustContain(t, sw, "public struct Thread: Codable, Sendable {")
+	mustContain(t, sw, "@Indirect public var parent: Thread?")
+	mustContain(t, sw, "public var replies: [Thread]?")
+	mustContain(t, sw, "@Indirect public var pinned: Note?")
+	mustContain(t, sw, "@Indirect public var folder: Folder?")
+	mustContain(t, sw, "public struct Indirect<Value: Sendable>: Sendable {")
+	if strings.Contains(sw, "public final class") {
+		t.Error("no struct should become a class")
+	}
+	if strings.Contains(sw, "@Indirect public var replies") {
+		t.Error("a slice doesn't close a cycle")
+	}
+}
+
+// Compiles the generated Swift with swiftc (skipped without a toolchain) and
+// round-trips a cyclic value through JSON, including a missing and a null
+// optional indirect key.
+func TestSwiftCyclesCompileAndRoundTrip(t *testing.T) {
+	swiftc, err := exec.LookPath("swiftc")
+	if err != nil {
+		t.Skip("swiftc not installed")
+	}
+	gen := loadFixture(t, &PackageConfig{})
+	sw, err := gen.GenerateSwift()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	main := `
+import Foundation
+func check(_ ok: Bool, _ msg: String) { if !ok { print("FAIL", msg); exit(1) } }
+let json = #"{"id":"a","parent":{"id":"root","parent":null},"replies":[{"id":"r"}]}"#
+let t = try JSONDecoder().decode(Thread.self, from: Data(json.utf8))
+check(t.parent?.id == "root", "parent decoded")
+check(t.parent?.parent == nil, "null parent decodes to nil")
+check(t.replies?.first?.parent == nil, "missing parent decodes to nil")
+var copy = t
+copy.parent = Thread(id: "other")
+check(t.parent?.id == "root", "value semantics: the original is untouched")
+let out = String(decoding: try JSONEncoder().encode(Thread(id: "x")), as: UTF8.self)
+check(!out.contains("parent"), "nil indirect field is omitted: \(out)")
+func needsSendable<T: Sendable>(_: T) {}
+needsSendable(t)
+print("OK")
+`
+	if err := os.WriteFile(filepath.Join(dir, "Types.swift"), []byte(sw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.swift"), []byte(main), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "check")
+	build := exec.Command(swiftc, "-swift-version", "6", "-o", bin, filepath.Join(dir, "Types.swift"), filepath.Join(dir, "main.swift"))
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("swiftc: %v\n%s", err, out)
+	}
+	out, err := exec.Command(bin).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "OK") {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+}

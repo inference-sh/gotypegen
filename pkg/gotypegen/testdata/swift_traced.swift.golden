@@ -63,7 +63,7 @@ extension JSONValue: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral, Ex
 // MARK: - api.go
 
 /// APIResponse is a generic API response wrapper.
-public struct APIResponse<T: Codable>: Codable {
+public struct APIResponse<T: Codable & Sendable>: Codable, Sendable {
     public var success: Bool
     public var data: T?
     public var error: String?
@@ -86,7 +86,7 @@ public struct APIResponse<T: Codable>: Codable {
 }
 
 /// SDKTypes is a phantom type that pulls types into the trace.
-public struct SDKTypes: Codable {
+public struct SDKTypes: Codable, Sendable {
     public init() {}
 }
 
@@ -104,7 +104,7 @@ public struct AppCategory: RawRepresentable, Codable, Hashable, Sendable {
 }
 
 /// Base holds common fields for all models.
-public struct Base: Codable {
+public struct Base: Codable, Sendable {
     public var id: String
     public var createdAt: String
     public var updatedAt: String
@@ -131,7 +131,7 @@ public struct Base: Codable {
 }
 
 /// App represents an application.
-public struct App: Codable {
+public struct App: Codable, Sendable {
     public var id: String
     public var createdAt: String
     public var updatedAt: String
@@ -178,7 +178,7 @@ public struct App: Codable {
 }
 
 /// AppVersion represents a version of an app.
-public struct AppVersion: Codable {
+public struct AppVersion: Codable, Sendable {
     public var tag: String
     public var description: String?
 

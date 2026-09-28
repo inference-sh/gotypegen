@@ -22,6 +22,26 @@ class SDKTypes(TypedDict, total=False):
 
 
 ##########
+# source: cycles.go
+
+# Thread reaches itself through a pointer (Parent) and through a slice
+# (Replies). Only the pointer closes a cycle a Swift struct can't hold.
+class Thread(TypedDict, total=False):
+    id: str
+    parent: Optional[Thread]
+    replies: List[Optional[Thread]]
+
+# Folder and Note reach each other: Folder → *Note → *Folder.
+class Folder(TypedDict, total=False):
+    name: str
+    pinned: Optional[Note]
+
+class Note(TypedDict, total=False):
+    text: str
+    folder: Optional[Folder]
+
+
+##########
 # source: types.go
 
 # Base holds common fields for all models.

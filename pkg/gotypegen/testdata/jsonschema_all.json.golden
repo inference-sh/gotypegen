@@ -220,6 +220,21 @@
         "prompt"
       ]
     },
+    "Folder": {
+      "type": "object",
+      "description": "Folder and Note reach each other: Folder → *Note → *Folder.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "pinned": {
+          "$ref": "#/$defs/Note"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
     "GenerationSettings": {
       "type": "object",
       "description": "GenerationSettings is shared by embedding; encoding/json promotes its\nfields onto the embedding struct.",
@@ -283,6 +298,20 @@
       "type": "string",
       "description": "MergeStrategy defines how a delta field should be merged."
     },
+    "Note": {
+      "type": "object",
+      "properties": {
+        "folder": {
+          "$ref": "#/$defs/Folder"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
     "ProtocolMeta": {
       "type": "object",
       "description": "ProtocolMeta has JSON tags with dots and slashes that are not valid\nidentifiers in Python or JavaScript — the generators must handle them.",
@@ -314,6 +343,27 @@
     "TaskStatus": {
       "type": "integer",
       "description": "TaskStatus represents the status of a task."
+    },
+    "Thread": {
+      "type": "object",
+      "description": "Thread reaches itself through a pointer (Parent) and through a slice\n(Replies). Only the pointer closes a cycle a Swift struct can't hold.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parent": {
+          "$ref": "#/$defs/Thread"
+        },
+        "replies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Thread"
+          }
+        }
+      },
+      "required": [
+        "id"
+      ]
     },
     "Unreferenced": {
       "type": "object",

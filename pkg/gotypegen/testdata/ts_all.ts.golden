@@ -18,6 +18,30 @@ export interface SDKTypes {
 }
 
 //////////
+// source: cycles.go
+
+/**
+ * Thread reaches itself through a pointer (Parent) and through a slice
+ * (Replies). Only the pointer closes a cycle a Swift struct can't hold.
+ */
+export interface Thread {
+  id: string;
+  parent?: Thread;
+  replies?: (Thread | undefined)[];
+}
+/**
+ * Folder and Note reach each other: Folder → *Note → *Folder.
+ */
+export interface Folder {
+  name: string;
+  pinned?: Note;
+}
+export interface Note {
+  text: string;
+  folder?: Folder;
+}
+
+//////////
 // source: types.go
 
 /**
