@@ -1134,6 +1134,10 @@ func TestPyPydanticOmitemptyIsOptional(t *testing.T) {
 	mustContain(t, code, `description: str = ""`)
 	// fields without omitempty stay required
 	mustContain(t, code, "category: AppCategory\n")
+	// enums and named maps are optional; a struct is always written, so required
+	mustContain(t, code, "kind: Optional[AppCategory] = None")
+	mustContain(t, code, "settings: Optional[Settings] = None")
+	mustContain(t, code, "version: AppVersion\n")
 }
 
 func TestPyPydanticModelRebuild(t *testing.T) {

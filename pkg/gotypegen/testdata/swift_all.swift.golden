@@ -579,3 +579,31 @@ public struct WireShapes: Codable, Sendable {
     }
 }
 
+/// OmitShapes covers omitempty on each kind: encoding/json leaves an empty
+/// enum, slice or map off the wire but always writes a struct.
+public struct OmitShapes: Codable, Sendable {
+    public var kind: AppCategory?
+    public var names: [String]?
+    public var settings: Settings?
+    @Indirect public var version: AppVersion?
+
+    public init(
+        kind: AppCategory? = nil,
+        names: [String]? = nil,
+        settings: Settings? = nil,
+        version: AppVersion? = nil
+    ) {
+        self.kind = kind
+        self.names = names
+        self.settings = settings
+        self.version = version
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case kind = "kind"
+        case names = "names"
+        case settings = "settings"
+        case version = "version"
+    }
+}
+

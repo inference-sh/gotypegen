@@ -195,3 +195,13 @@ export interface WireShapes {
   label?: Bound;
   value: Bound;
 }
+/**
+ * OmitShapes covers omitempty on each kind: encoding/json leaves an empty
+ * enum, slice or map off the wire but always writes a struct.
+ */
+export interface OmitShapes {
+  kind?: AppCategory;
+  names?: string[];
+  settings?: Settings;
+  version?: AppVersion;
+}

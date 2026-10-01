@@ -107,6 +107,14 @@ class WireShapes(TypedDict, total=False):
     label: Optional[Bound]
     value: Bound
 
+# OmitShapes covers omitempty on each kind: encoding/json leaves an empty
+# enum, slice or map off the wire but always writes a struct.
+class OmitShapes(TypedDict, total=False):
+    kind: AppCategory
+    names: List[str]
+    settings: Settings
+    version: AppVersion
+
 
 ##########
 # source: types.go

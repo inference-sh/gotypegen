@@ -312,6 +312,27 @@
         "text"
       ]
     },
+    "OmitShapes": {
+      "type": "object",
+      "description": "OmitShapes covers omitempty on each kind: encoding/json leaves an empty\nenum, slice or map off the wire but always writes a struct.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AppCategory"
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "settings": {
+          "$ref": "#/$defs/Settings"
+        },
+        "version": {
+          "$ref": "#/$defs/AppVersion"
+        }
+      }
+    },
     "ProtocolMeta": {
       "type": "object",
       "description": "ProtocolMeta has JSON tags with dots and slashes that are not valid\nidentifiers in Python or JavaScript — the generators must handle them.",

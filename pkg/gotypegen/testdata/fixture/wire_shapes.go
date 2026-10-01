@@ -27,3 +27,12 @@ type WireShapes struct {
 	Label    *Bound   `json:"label,omitempty"`
 	Value    Bound    `json:"value"`
 }
+
+// OmitShapes covers omitempty on each kind: encoding/json leaves an empty
+// enum, slice or map off the wire but always writes a struct.
+type OmitShapes struct {
+	Kind     AppCategory `json:"kind,omitempty"`
+	Names    []string    `json:"names,omitempty"`
+	Settings Settings    `json:"settings,omitempty"`
+	Version  AppVersion  `json:"version,omitempty"`
+}

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"regexp"
 	"strings"
 
 	"github.com/fatih/structtag"
+	"golang.org/x/tools/go/packages"
 )
 
 var validPyNameRegexp = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -1142,15 +1144,35 @@ func (g *PackageGenerator) writePyModelRebuilds(s *strings.Builder, entries []py
 // correspond to Go value types (non-pointer). Returns "" for complex
 // types (lists, dicts, custom classes) which stay required.
 // pyFieldType is the Python type of a struct field. In pydantic mode an
-// omitempty field with no zero-value default (an enum, slice, map or struct)
-// is Optional: Go leaves it off the wire when empty, so a model that required
-// it would reject what Go sends.
+// omitempty enum, slice or map is Optional: Go leaves it off the wire when
+// empty, so a model that required it would reject what Go sends. Scalars keep
+// their zero-value default, and structs stay required because encoding/json
+// never omits a struct.
 func (g *PackageGenerator) pyFieldType(expr ast.Expr, omitempty bool) string {
 	pyType := g.exprToPythonType(expr)
 	if !omitempty || !g.conf.IsPydantic() || strings.HasPrefix(pyType, "Optional[") || pyZeroValue(pyType) != "" {
 		return pyType
 	}
+	if g.isStructExpr(expr) {
+		return pyType
+	}
 	return fmt.Sprintf("Optional[%s]", pyType)
+}
+
+// isStructExpr reports whether expr has a struct underlying type, looking in
+// the generated package and the packages inlined into it.
+func (g *PackageGenerator) isStructExpr(expr ast.Expr) bool {
+	pkgs := append([]*packages.Package{g.pkg}, g.inlinePkgs...)
+	for _, pkg := range pkgs {
+		if pkg == nil || pkg.TypesInfo == nil {
+			continue
+		}
+		if t := pkg.TypesInfo.TypeOf(expr); t != nil {
+			_, ok := t.Underlying().(*types.Struct)
+			return ok
+		}
+	}
+	return false
 }
 
 func pyZeroValue(pyType string) string {
