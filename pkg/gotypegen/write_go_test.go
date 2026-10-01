@@ -1120,6 +1120,22 @@ func TestPyPydanticOptionalDefaults(t *testing.T) {
 	mustContain(t, code, "version: Optional[AppVersion] = None")
 }
 
+func TestPyPydanticOmitemptyIsOptional(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+	code, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// omitempty slices and maps are absent on the wire when empty
+	mustContain(t, code, "tags: Optional[List[str]] = None")
+	mustContain(t, code, "metadata: Optional[Dict[str, Any]] = None")
+	// omitempty scalars keep their zero-value default
+	mustContain(t, code, `description: str = ""`)
+	// fields without omitempty stay required
+	mustContain(t, code, "category: AppCategory\n")
+}
+
 func TestPyPydanticModelRebuild(t *testing.T) {
 	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
 	code, err := gen.GeneratePython()

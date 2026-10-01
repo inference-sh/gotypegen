@@ -609,7 +609,7 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 				continue
 			}
 
-			jsonName, _ := g.getPyFieldInfo(field)
+			jsonName, omitempty := g.getPyFieldInfo(field)
 			if jsonName == "-" {
 				continue
 			}
@@ -634,7 +634,7 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 			fields = append(fields, pyFieldInfo{
 				jsonName:   jsonName,
 				pyName:     pyName,
-				pyType:     g.exprToPythonType(field.Type),
+				pyType:     g.pyFieldType(field.Type, omitempty),
 				doc:        docStr,
 				needsAlias: needsAlias,
 				tags:       g.configuredFieldTags(field),
@@ -1141,6 +1141,18 @@ func (g *PackageGenerator) writePyModelRebuilds(s *strings.Builder, entries []py
 // pyZeroValue returns the Python default literal for scalar types that
 // correspond to Go value types (non-pointer). Returns "" for complex
 // types (lists, dicts, custom classes) which stay required.
+// pyFieldType is the Python type of a struct field. In pydantic mode an
+// omitempty field with no zero-value default (an enum, slice, map or struct)
+// is Optional: Go leaves it off the wire when empty, so a model that required
+// it would reject what Go sends.
+func (g *PackageGenerator) pyFieldType(expr ast.Expr, omitempty bool) string {
+	pyType := g.exprToPythonType(expr)
+	if !omitempty || !g.conf.IsPydantic() || strings.HasPrefix(pyType, "Optional[") || pyZeroValue(pyType) != "" {
+		return pyType
+	}
+	return fmt.Sprintf("Optional[%s]", pyType)
+}
+
 func pyZeroValue(pyType string) string {
 	switch pyType {
 	case "str":
