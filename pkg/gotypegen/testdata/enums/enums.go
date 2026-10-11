@@ -45,12 +45,24 @@ const (
 )
 
 type Item struct {
-	Color Color  `json:"color"`
-	Stage Stage  `json:"stage"`
-	Label Label  `json:"label"`
-	Name  Name   `json:"name"`
-	Owner string `json:"owner"`
+	Color Color    `json:"color"`
+	Stage Stage    `json:"stage"`
+	Prio  Priority `json:"prio"`
+	Label Label    `json:"label"`
+	Name  Name     `json:"name"`
+	Owner string   `json:"owner"`
 
 	Counts map[Stage]int    `json:"counts"`
 	Tags   map[Label]string `json:"tags"`
 }
+
+// Priority is an int enum whose values span two blocks.
+type Priority int
+
+const (
+	PriorityLow Priority = iota
+	PriorityHigh
+)
+
+// PriorityUrgent is declared on its own.
+const PriorityUrgent Priority = 9

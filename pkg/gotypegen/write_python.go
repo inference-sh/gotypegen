@@ -111,12 +111,7 @@ func (g *PackageGenerator) GeneratePython() (string, error) {
 	}
 
 	// Emit constants
-	for _, entry := range constEntries {
-		parts := strings.Split(entry.file, "/")
-		fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-		s.WriteString(fileComment)
-		g.writePyConsts(s, entry.decl, stringTypeAliases, intTypeAliases, enumMembers)
-	}
+	g.writePyConstEntries(s, constEntries, stringTypeAliases, intTypeAliases, enumMembers, nil, nil)
 
 	// Pydantic: rebuild models to resolve forward references
 	if g.conf.IsPydantic() {
@@ -140,36 +135,13 @@ func (g *PackageGenerator) buildEnumMemberMap(stringTypeAliases, intTypeAliases 
 				continue
 			}
 
-			// Find the type for this const group
-			var groupTypeName string
-			for _, spec := range genDecl.Specs {
-				if vs, ok := spec.(*ast.ValueSpec); ok && vs.Type != nil {
-					if ident, ok := vs.Type.(*ast.Ident); ok {
-						if stringTypeAliases[ident.Name] || intTypeAliases[ident.Name] {
-							groupTypeName = ident.Name
-						}
-					}
-				}
-				break
-			}
-
-			if groupTypeName == "" {
-				continue
-			}
-
-			// Record all members of this enum
-			for _, spec := range genDecl.Specs {
-				vs, ok := spec.(*ast.ValueSpec)
-				if !ok {
+			for _, c := range pyConstsOf(genDecl) {
+				typeName := constEnumType(c, stringTypeAliases, intTypeAliases)
+				if typeName == "" {
 					continue
 				}
-				for _, name := range vs.Names {
-					if name.Name == "_" || !name.IsExported() {
-						continue
-					}
-					memberName := toUpperSnake(enumMemberBase(name.Name, groupTypeName))
-					enumMembers[name.Name] = enumMemberInfo{groupTypeName, memberName}
-				}
+				memberName := toUpperSnake(enumMemberBase(c.name, typeName))
+				enumMembers[c.name] = enumMemberInfo{typeName, memberName}
 			}
 		}
 	}
@@ -358,15 +330,7 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 	}
 
 	// Emit constants
-	for _, entry := range constEntries {
-		if !writtenHeaders[entry.file] {
-			parts := strings.Split(entry.file, "/")
-			fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-			s.WriteString(fileComment)
-			writtenHeaders[entry.file] = true
-		}
-		g.writePyConsts(s, entry.decl, stringTypeAliases, intTypeAliases, enumMembers)
-	}
+	g.writePyConstEntries(s, constEntries, stringTypeAliases, intTypeAliases, enumMembers, includedTypes, writtenHeaders)
 
 	// Pydantic: rebuild models to resolve forward references
 	if g.conf.IsPydantic() {
@@ -735,191 +699,6 @@ func (g *PackageGenerator) collectPyParentTypes(fields []*ast.Field) []string {
 		}
 	}
 	return parents
-}
-
-func (g *PackageGenerator) writePyConsts(s *strings.Builder, decl *ast.GenDecl, stringTypeAliases, intTypeAliases map[string]bool, enumMembers map[string]enumMemberInfo) {
-	if decl.Doc != nil {
-		doc := strings.TrimSpace(decl.Doc.Text())
-		s.WriteString("# ")
-		s.WriteString(strings.ReplaceAll(doc, "\n", "\n# "))
-		s.WriteString("\n")
-	}
-
-	iotaValue := -1
-	var groupType string
-	var groupTypeName string
-	isStringEnum := false
-	isIntEnum := false
-
-	for _, spec := range decl.Specs {
-		vs, ok := spec.(*ast.ValueSpec)
-		if !ok || vs.Type == nil {
-			continue
-		}
-		if ident, ok := vs.Type.(*ast.Ident); ok {
-			groupTypeName = ident.Name
-			if stringTypeAliases[ident.Name] {
-				isStringEnum = true
-			} else if intTypeAliases[ident.Name] {
-				isIntEnum = true
-			}
-			groupType = goBaseToPython(ident.Name)
-		} else {
-			groupType = g.exprToPythonType(vs.Type)
-		}
-		break
-	}
-
-	if isStringEnum {
-		g.writePyStrEnum(s, decl, groupTypeName)
-		return
-	}
-
-	if isIntEnum {
-		g.writePyIntEnum(s, decl, groupTypeName)
-		return
-	}
-
-	for _, spec := range decl.Specs {
-		vs, ok := spec.(*ast.ValueSpec)
-		if !ok {
-			continue
-		}
-
-		for i, name := range vs.Names {
-			iotaValue++
-
-			if name.Name == "_" {
-				continue
-			}
-			if !name.IsExported() {
-				continue
-			}
-
-			if vs.Doc != nil {
-				doc := strings.TrimSpace(vs.Doc.Text())
-				s.WriteString("# ")
-				s.WriteString(strings.ReplaceAll(doc, "\n", "\n# "))
-				s.WriteString("\n")
-			}
-
-			s.WriteString(name.Name)
-
-			if groupType != "" {
-				s.WriteString(": ")
-				s.WriteString(groupType)
-			}
-
-			s.WriteString(" = ")
-
-			if i < len(vs.Values) {
-				s.WriteString(g.getPyConstValue(vs.Values[i], iotaValue, enumMembers))
-			} else {
-				s.WriteString(fmt.Sprintf("%d", iotaValue))
-			}
-			s.WriteString("\n")
-		}
-	}
-	s.WriteString("\n")
-}
-
-func (g *PackageGenerator) writePyIntEnum(s *strings.Builder, decl *ast.GenDecl, typeName string) {
-	s.WriteString("class ")
-	s.WriteString(typeName)
-	s.WriteString("(IntEnum):\n")
-
-	hasMembers := false
-	iotaValue := -1
-	for _, spec := range decl.Specs {
-		vs, ok := spec.(*ast.ValueSpec)
-		if !ok {
-			continue
-		}
-
-		for i, name := range vs.Names {
-			iotaValue++
-
-			if name.Name == "_" || !name.IsExported() {
-				continue
-			}
-
-			hasMembers = true
-
-			if vs.Doc != nil {
-				doc := strings.TrimSpace(vs.Doc.Text())
-				s.WriteString("    # ")
-				s.WriteString(strings.ReplaceAll(doc, "\n", "\n    # "))
-				s.WriteString("\n")
-			}
-
-			memberName := toUpperSnake(enumMemberBase(name.Name, typeName))
-
-			s.WriteString("    ")
-			s.WriteString(memberName)
-			s.WriteString(" = ")
-
-			if i < len(vs.Values) {
-				s.WriteString(g.getPyConstValue(vs.Values[i], iotaValue, nil))
-			} else {
-				s.WriteString(fmt.Sprintf("%d", iotaValue))
-			}
-			s.WriteString("\n")
-		}
-	}
-
-	if !hasMembers {
-		s.WriteString("    pass\n")
-	}
-	s.WriteString("\n")
-}
-
-// writePyStrEnum generates a StrEnum class for string const groups.
-// Uses (str, Enum) instead of StrEnum for Python 3.10 compatibility.
-func (g *PackageGenerator) writePyStrEnum(s *strings.Builder, decl *ast.GenDecl, typeName string) {
-	s.WriteString("class ")
-	s.WriteString(typeName)
-	s.WriteString("(str, Enum):\n")
-
-	hasMembers := false
-	for _, spec := range decl.Specs {
-		vs, ok := spec.(*ast.ValueSpec)
-		if !ok {
-			continue
-		}
-
-		for i, name := range vs.Names {
-			if name.Name == "_" || !name.IsExported() {
-				continue
-			}
-
-			hasMembers = true
-
-			if vs.Doc != nil {
-				doc := strings.TrimSpace(vs.Doc.Text())
-				s.WriteString("    # ")
-				s.WriteString(strings.ReplaceAll(doc, "\n", "\n    # "))
-				s.WriteString("\n")
-			}
-
-			memberName := toUpperSnake(enumMemberBase(name.Name, typeName))
-
-			s.WriteString("    ")
-			s.WriteString(memberName)
-			s.WriteString(" = ")
-
-			if i < len(vs.Values) {
-				s.WriteString(g.getPyConstValue(vs.Values[i], 0, nil))
-			} else {
-				s.WriteString(`""`)
-			}
-			s.WriteString("\n")
-		}
-	}
-
-	if !hasMembers {
-		s.WriteString("    pass\n")
-	}
-	s.WriteString("\n")
 }
 
 // toUpperSnake converts CamelCase to UPPER_SNAKE_CASE.
