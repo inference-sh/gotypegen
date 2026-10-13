@@ -107,7 +107,7 @@ Anonymous struct fields follow `encoding/json`:
 
 - **No json name → inlined.** The embedded struct's fields are promoted onto the outer type in TypeScript, pydantic, and JSON Schema output, exactly as they appear on the wire. Field tags on promoted fields are surfaced too.
 - **json name → nested field.** `Base \`json:"base"\`` is a field named `base` of type `Base`.
-- **`tstype:",extends"` → inheritance.** The embedded type becomes a parent class/interface in TypeScript and pydantic. JSON Schema has no inheritance, so there the parent's properties are inlined onto the child.
+- **`tstype:",extends"` → inheritance, except where order matters.** The embedded type becomes a parent interface in TypeScript and a parent class in the TypedDict output. JSON Schema has no inheritance, and a pydantic class lists inherited fields before its own whatever the source says, so in both of those the parent's fields are inlined at the embed's position: the generated field order is the Go source order (pydantic's JSON schema follows it). A parent with no fields has nothing to order and stays a base class in pydantic, so it keeps working as an `isinstance` marker; a parent that cannot be resolved is inherited too.
 
 ```go
 type GenerationSettings struct {

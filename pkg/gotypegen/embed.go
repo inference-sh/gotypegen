@@ -28,6 +28,38 @@ func (g *PackageGenerator) expandAllEmbeds(fields []*ast.Field) []*ast.Field {
 	return g.expandEmbeds(fields, true)
 }
 
+// expandPydanticEmbeds is expandAllEmbeds for the pydantic writer. A pydantic
+// class lists inherited fields before its own whatever the source says, so an
+// extends parent is inlined at the embed's position and the field order is
+// the source order. A parent with no fields has nothing to order and stays a
+// base class: it is a marker (isinstance) and inlining it would erase that.
+func (g *PackageGenerator) expandPydanticEmbeds(fields []*ast.Field) []*ast.Field {
+	var out []*ast.Field
+	for _, f := range fields {
+		if len(f.Names) != 0 || !(g.isInlineEmbed(f) || g.isExtendsEmbed(f)) {
+			out = append(out, f)
+			continue
+		}
+		name, ok := getAnonymousFieldName(f.Type)
+		if !ok {
+			out = append(out, f)
+			continue
+		}
+		st := g.structTypeByName(name)
+		if st == nil || st.Fields == nil {
+			out = append(out, f)
+			continue
+		}
+		expanded := g.expandPydanticEmbeds(st.Fields.List)
+		if len(expanded) == 0 && g.isExtendsEmbed(f) {
+			out = append(out, f) // marker parent: keep inheriting
+			continue
+		}
+		out = append(out, expanded...)
+	}
+	return out
+}
+
 func (g *PackageGenerator) expandEmbeds(fields []*ast.Field, includeExtends bool) []*ast.Field {
 	var out []*ast.Field
 	for _, f := range fields {

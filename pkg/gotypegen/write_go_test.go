@@ -1090,7 +1090,9 @@ func TestPyPydanticBaseModel(t *testing.T) {
 	}
 
 	mustContain(t, code, "from pydantic import BaseModel")
-	mustContain(t, code, "class App(Base, BaseModel):")
+	// an extends parent is inlined in place in pydantic output
+	mustContain(t, code, "class App(BaseModel):")
+	mustInOrder(t, code, "class App(BaseModel):", "    id: str", "    created_at:")
 	mustContain(t, code, "class Base(BaseModel):")
 	mustNotContain(t, code, "TypedDict")
 }
@@ -1163,7 +1165,7 @@ func TestPyPydanticTracedMode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mustContain(t, code, "class App(Base, BaseModel):")
+	mustContain(t, code, "class App(BaseModel):")
 	mustContain(t, code, "model_rebuild()")
 	mustNotContain(t, code, "class Unreferenced")
 }

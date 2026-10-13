@@ -42,13 +42,48 @@ func TestPyInlineEmbeddedStruct(t *testing.T) {
 	mustContain(t, out, `"prompt": {"merge": "concat"}`)
 }
 
-func TestExtendsStillInherits(t *testing.T) {
-	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic"})
+func TestExtendsStillInheritsInTypedDict(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{})
 	out, err := gen.GeneratePython()
 	if err != nil {
 		t.Fatalf("GeneratePython: %v", err)
 	}
-	mustContain(t, out, "class LLMDelta(StreamDelta")
+	mustContain(t, out, "class LLMDelta(StreamDelta, TypedDict, total=False):")
+	mustContain(t, out, "class ExtendedCall(GenerationSettings, TypedDict, total=False):")
+}
+
+// pydantic puts inherited fields first whatever the Go source says, so the
+// pydantic writer inlines an extends parent where the embed sits: the
+// generated field order, and the JSON schema pydantic derives from it, is
+// the source order.
+func TestPyExtendsInlinedInSourceOrder(t *testing.T) {
+	gen := loadFixture(t, &PackageConfig{PythonStyle: "pydantic", FieldTags: []string{"merge"}})
+	out, err := gen.GeneratePython()
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+	mustContain(t, out, "class ExtendedCall(BaseModel):")
+	mustNotContain(t, out, "class ExtendedCall(GenerationSettings")
+	// an empty parent is a marker (isinstance) and stays a base class
+	mustContain(t, out, "class LLMDelta(StreamDelta, BaseModel):")
+	mustInOrder(t, out, "class ExtendedCall(BaseModel):", "    temperature: Optional[float] = None", "    max_tokens: Optional[int] = None", "    prompt: str = \"\"")
+	// the parent's field tags travel with its fields
+	mustInOrder(t, out, "class ExtendedCall(BaseModel):", `"temperature": {"merge": "replace"}`)
+	// the parent type itself is still emitted
+	mustContain(t, out, "class GenerationSettings(BaseModel):")
+}
+
+// mustInOrder asserts every needle occurs, each after the previous one.
+func mustInOrder(t *testing.T, out string, needles ...string) {
+	t.Helper()
+	pos := 0
+	for _, n := range needles {
+		i := strings.Index(out[pos:], n)
+		if i < 0 {
+			t.Fatalf("expected %q after offset %d in output", n, pos)
+		}
+		pos += i + len(n)
+	}
 }
 
 func TestJSONSchemaInlineEmbeddedStruct(t *testing.T) {
@@ -79,7 +114,9 @@ func TestExtendsInheritsInTsAndPy_InlinesInJSONSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GeneratePython: %v", err)
 	}
-	mustContain(t, py, "class ExtendedCall(GenerationSettings")
+	// pydantic inlines the parent in place (see TestPyExtendsInlinedInSourceOrder)
+	mustContain(t, py, "class ExtendedCall(BaseModel):")
+	mustInOrder(t, py, "class ExtendedCall(BaseModel):", "    temperature:", "    prompt:")
 
 	js, err := gen.GenerateJSONSchema()
 	if err != nil {

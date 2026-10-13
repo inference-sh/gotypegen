@@ -421,8 +421,19 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("\n")
 	}
 
-	parents := g.collectPyParentTypes(st.Fields.List)
 	pydantic := g.conf.IsPydantic()
+
+	// A pydantic class inherits a parent's fields *before* its own, whatever
+	// the Go source says, so the pydantic writer inlines a tstype:",extends"
+	// parent at the embed's position instead: the generated field order is
+	// the source order (and so is the JSON schema pydantic derives from it).
+	// A parent with no fields (a marker) and one that cannot be resolved are
+	// still inherited; see expandPydanticEmbeds.
+	parentFields := st.Fields.List
+	if pydantic {
+		parentFields = g.expandPydanticEmbeds(st.Fields.List)
+	}
+	parents := g.collectPyParentTypes(parentFields)
 
 	// Collect fields and check if any need the functional TypedDict form.
 	fields := g.collectPyFields(st)
@@ -552,7 +563,12 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 		return nil
 	}
 	var fields []pyFieldInfo
-	for _, field := range g.expandInlineFields(st.Fields.List) {
+	expanded := g.expandInlineFields(st.Fields.List)
+	if g.conf.IsPydantic() {
+		// pydantic: extends parents are inlined in place too, see writePyTypedDict.
+		expanded = g.expandPydanticEmbeds(st.Fields.List)
+	}
+	for _, field := range expanded {
 		names := field.Names
 		if len(names) == 0 {
 			// Anonymous field that survived expansion: either a json-named
