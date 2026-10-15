@@ -411,7 +411,11 @@ type pyFieldInfo struct {
 	pyType     string
 	doc        string
 	needsAlias bool
-	tags       map[string]string // configured field_tags values (e.g. "merge" -> "concat")
+	// keyword: jsonName is a Python keyword (e.g. "async"). A class-form
+	// TypedDict would have to rename the key (async_), which changes the wire
+	// key, so TypedDict output uses the functional form for it.
+	keyword bool
+	tags    map[string]string // configured field_tags values (e.g. "merge" -> "concat")
 }
 
 func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st *ast.StructType, doc string) {
@@ -439,7 +443,7 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 	fields := g.collectPyFields(st)
 	needsFunctional := false
 	for _, f := range fields {
-		if f.needsAlias && !pydantic {
+		if (f.needsAlias || f.keyword) && !pydantic {
 			needsFunctional = true
 			break
 		}
@@ -509,10 +513,14 @@ func (g *PackageGenerator) writePyTypedDict(s *strings.Builder, name string, st 
 		s.WriteString("\n")
 	}
 
-	// Emit _field_tags if any fields have configured tags
-	g.writePyFieldTags(s, name, fields)
-
+	if pydantic {
+		// Emit _field_tags if any fields have configured tags
+		g.writePyFieldTags(s, name, fields)
+		s.WriteString("\n")
+		return
+	}
 	s.WriteString("\n")
+	g.writePyFieldTags(s, name, fields)
 }
 
 // writePyFunctionalTypedDict emits the functional form:
@@ -539,6 +547,8 @@ func (g *PackageGenerator) writePyFunctionalTypedDict(s *strings.Builder, name s
 		s.WriteString("}, total=False)\n\n")
 		return
 	}
+
+	defer g.writePyFieldTags(s, name, fields)
 
 	s.WriteString("\n")
 	for _, f := range fields {
@@ -601,11 +611,13 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 
 			pyName := jsonName
 			needsAlias := false
+			keyword := false
 			if !validPyNameRegexp.MatchString(jsonName) {
 				pyName = sanitizePyName(jsonName)
 				needsAlias = true
 			} else if isPythonKeyword(jsonName) {
 				pyName = jsonName + "_"
+				keyword = true
 			}
 
 			var docStr string
@@ -619,6 +631,7 @@ func (g *PackageGenerator) collectPyFields(st *ast.StructType) []pyFieldInfo {
 				pyType:     g.pyFieldType(field.Type, omitempty),
 				doc:        docStr,
 				needsAlias: needsAlias,
+				keyword:    keyword,
 				tags:       g.configuredFieldTags(field),
 			})
 		}
@@ -644,9 +657,15 @@ func sanitizePyName(name string) string {
 	return s
 }
 
-// writePyFieldTags emits a _field_tags class variable containing configured
-// struct tag values for each field. Only emitted when at least one field has
-// a tag from the field_tags config.
+// writePyFieldTags emits the _field_tags metadata: configured struct tag
+// values for each field. Only emitted when at least one field has a tag from
+// the field_tags config.
+//
+// pydantic: a `_field_tags: ClassVar[dict]` class variable inside the class.
+// TypedDict: a TypedDict body may only declare keys (type checkers reject a
+// value there, and ClassVar inside a TypedDict), so the dict is set on the
+// class after its definition, written right after it. The runtime result is
+// the same class attribute: Name.__dict__["_field_tags"].
 func (g *PackageGenerator) writePyFieldTags(s *strings.Builder, typeName string, fields []pyFieldInfo) {
 	// Check if any fields have tag metadata
 	hasMeta := false
@@ -660,16 +679,20 @@ func (g *PackageGenerator) writePyFieldTags(s *strings.Builder, typeName string,
 		return
 	}
 
+	indent := ""
 	if g.conf.IsPydantic() {
+		indent = "    "
 		s.WriteString("\n    _field_tags: ClassVar[dict] = {\n")
 	} else {
-		s.WriteString("\n    _field_tags = {\n")
+		s.WriteString(typeName)
+		s.WriteString("._field_tags = {  # type: ignore[attr-defined]\n")
 	}
 	for _, f := range fields {
 		if len(f.tags) == 0 {
 			continue
 		}
-		s.WriteString("        \"")
+		s.WriteString(indent)
+		s.WriteString("    \"")
 		s.WriteString(f.jsonName)
 		s.WriteString("\": {")
 		first := true
@@ -690,7 +713,11 @@ func (g *PackageGenerator) writePyFieldTags(s *strings.Builder, typeName string,
 		}
 		s.WriteString("},\n")
 	}
-	s.WriteString("    }\n")
+	s.WriteString(indent)
+	s.WriteString("}\n")
+	if !g.conf.IsPydantic() {
+		s.WriteString("\n")
+	}
 }
 
 // collectPyParentTypes extracts parent type names from embedded fields
