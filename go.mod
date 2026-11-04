@@ -1,6 +1,6 @@
 module github.com/inference-sh/gotypegen
 
-go 1.25.5
+go 1.26.10
 
 require (
 	github.com/fatih/structtag v1.2.0
