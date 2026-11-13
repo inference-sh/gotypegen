@@ -1,6 +1,7 @@
 package gotypegen
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"strings"
@@ -92,4 +93,25 @@ func (g *PackageGenerator) configuredFieldTags(field *ast.Field) map[string]stri
 		out[key] = tag.Name
 	}
 	return out
+}
+
+// quoteTagValue is a struct tag's value as a double-quoted string literal
+// that reads the same in Python and TypeScript. A quote, a backslash or a
+// line break in the tag cannot end the literal.
+func quoteTagValue(val string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range val {
+		switch {
+		case r == '"' || r == '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, "\\u%04x", r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
