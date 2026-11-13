@@ -706,9 +706,8 @@ func (g *PackageGenerator) writePyFieldTags(s *strings.Builder, typeName string,
 			}
 			s.WriteString("\"")
 			s.WriteString(tagKey)
-			s.WriteString("\": \"")
-			s.WriteString(val)
-			s.WriteString("\"")
+			s.WriteString("\": ")
+			s.WriteString(quoteTagValue(val))
 			first = false
 		}
 		s.WriteString("},\n")
