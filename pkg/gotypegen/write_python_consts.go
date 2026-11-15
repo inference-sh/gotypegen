@@ -157,8 +157,7 @@ func (g *PackageGenerator) writePyConstEntries(
 }
 
 func writePyFileHeader(s *strings.Builder, file string) {
-	parts := strings.Split(file, "/")
-	fmt.Fprintf(s, "\n##########\n# source: %s\n\n", parts[len(parts)-1])
+	fmt.Fprintf(s, "\n##########\n# source: %s\n\n", sourceFileName(file))
 }
 
 func writePyComment(s *strings.Builder, indent, doc string) {

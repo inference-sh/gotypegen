@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -108,7 +107,7 @@ func (w *swiftWriter) generate() (string, error) {
 	lastFile := ""
 	for _, e := range w.types {
 		if e.file != lastFile {
-			fmt.Fprintf(s, "// MARK: - %s\n\n", filepath.Base(e.file))
+			fmt.Fprintf(s, "// MARK: - %s\n\n", sourceFileName(e.file))
 			lastFile = e.file
 		}
 		w.writeType(s, e)
