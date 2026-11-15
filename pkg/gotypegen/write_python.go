@@ -102,9 +102,7 @@ func (g *PackageGenerator) GeneratePython() (string, error) {
 	lastFile := ""
 	for _, entry := range typeEntries {
 		if entry.file != lastFile {
-			parts := strings.Split(entry.file, "/")
-			fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-			s.WriteString(fileComment)
+			writePyFileHeader(s, entry.file)
 			lastFile = entry.file
 		}
 		g.writePyType(s, entry.spec, entry.doc)
@@ -319,9 +317,7 @@ func (g *PackageGenerator) GeneratePythonTraced() (string, error) {
 	for _, entry := range typeEntries {
 		if entry.file != lastFile {
 			if !writtenHeaders[entry.file] {
-				parts := strings.Split(entry.file, "/")
-				fileComment := fmt.Sprintf("\n##########\n# source: %s\n\n", parts[len(parts)-1])
-				s.WriteString(fileComment)
+				writePyFileHeader(s, entry.file)
 				writtenHeaders[entry.file] = true
 			}
 			lastFile = entry.file

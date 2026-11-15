@@ -281,8 +281,7 @@ func (g *PackageGenerator) writeInterfaceFields(
 		g.writeType(s, f.Type, nil, depth, false)
 
 		if f.Comment != nil && g.PreserveTypeComments() {
-			s.WriteString(" // ")
-			s.WriteString(f.Comment.Text())
+			g.writeSingleLineComment(s, f.Comment)
 		}
 	}
 
@@ -393,8 +392,7 @@ func (g *PackageGenerator) writeStructFields(s *strings.Builder, fields []*ast.F
 
 		if f.Comment != nil && g.PreserveTypeComments() {
 			// Line comment is present, that means a comment after the field.
-			s.WriteString(" // ")
-			s.WriteString(f.Comment.Text())
+			g.writeSingleLineComment(s, f.Comment)
 		} else {
 			s.WriteByte('\n')
 		}

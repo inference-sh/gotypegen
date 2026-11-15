@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -261,7 +260,7 @@ func (g *PackageGenerator) generateGoFile(
 	writeHeader := func() {
 		if !wroteHeader {
 			s.WriteString("\n// --------------------\n// source: ")
-			s.WriteString(filepath.Base(fp))
+			s.WriteString(sourceFileName(fp))
 			s.WriteString("\n// --------------------\n")
 			wroteHeader = true
 		}

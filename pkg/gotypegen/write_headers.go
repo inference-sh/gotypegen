@@ -18,13 +18,21 @@ func (g *PackageGenerator) writeFileFrontmatter(w *strings.Builder) {
 
 func (g *PackageGenerator) writeFileSourceHeader(w *strings.Builder, path string, file *ast.File) {
 	w.WriteString("\n//////////\n// source: ")
-	w.WriteString(filepath.Base(path))
+	w.WriteString(sourceFileName(path))
 	w.WriteString("\n")
 
 	if file.Doc != nil && g.PreserveDocComments() {
 		w.WriteString("/*\n")
-		w.WriteString(file.Doc.Text())
+		w.WriteString(escapeBlockComment(file.Doc.Text()))
 		w.WriteString("*/\n")
 	}
 	w.WriteString("\n")
+}
+
+// sourceFileName is the base name of a source file as written into a
+// "source:" line comment of a generated file, in every output language. A
+// file name may contain a newline; it is folded onto one line so the rest of
+// the name stays inside the comment.
+func sourceFileName(path string) string {
+	return singleLine(filepath.Base(path))
 }
